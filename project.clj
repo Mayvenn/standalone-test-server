@@ -4,7 +4,7 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :plugins [[s3-wagon-private "1.1.2"]]
-  :repositories [["private" {:url "s3p://private-bucket-name/releases/"
+  :repositories [["releases" {:url "s3p://private-bucket-name/releases/"
                              :username :env
                              :passphrase :env
                              :sign-releases false}]]
