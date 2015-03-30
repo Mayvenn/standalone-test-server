@@ -7,23 +7,22 @@
 
 (def default-handler (constantly default-response))
 
+(defn get-requests
+  [requests-count-reached requests]
+  (fn [& {:keys [timeout] :or {timeout 100}}]
+    (and (deref requests-count-reached timeout true) @requests)))
+
 (defn recording-endpoint
-  [complete-promise requests-complete? & {:keys [handler] :or {handler default-handler}}]
-  (let [requests (atom [])]
-    (fn [request]
-      (let [slurped-request (assoc request :body (-> request (:body) (slurp)))]
-        (swap! requests conj slurped-request)
-        (when (requests-complete? @requests)
-          (deliver complete-promise @requests))
-        (handler slurped-request)))))
-
-(defn matches-uri?
-  [uri req]
-  (->> req (:uri) (= uri)))
-
-(defn requests-matching-uri
-  [uri reqs]
-  (filter (partial matches-uri? uri) reqs))
+  [& {:keys [request-count handler] :or {request-count 1
+                                         handler default-handler}}]
+  (let [requests (atom [])
+        requests-count-reached (promise)]
+    [(get-requests requests-count-reached requests)
+     (fn [request]
+       (swap! requests conj (assoc request :body (-> request (:body) (slurp))))
+       (when (>= (count @requests) request-count)
+         (deliver requests-count-reached true))
+       (handler request))]))
 
 (defn standalone-server
   ([handler]
