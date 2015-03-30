@@ -7,7 +7,7 @@
 
 (def default-handler (constantly default-response))
 
-(defn get-requests
+(defn get-requests-wrapper
   [requests-count-reached requests]
   (fn [& {:keys [timeout] :or {timeout 100}}]
     (and (deref requests-count-reached timeout true) @requests)))
@@ -17,7 +17,7 @@
                                          handler default-handler}}]
   (let [requests (atom [])
         requests-count-reached (promise)]
-    [(get-requests requests-count-reached requests)
+    [(get-requests-wrapper requests-count-reached requests)
      (fn [request]
        (swap! requests conj (assoc request :body (-> request (:body) (slurp))))
        (when (>= (count @requests) request-count)
