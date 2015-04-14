@@ -9,7 +9,7 @@
 
 (defn get-requests-wrapper
   [requests-count-reached requests]
-  (fn [& {:keys [timeout] :or {timeout 100}}]
+  (fn [& {:keys [timeout] :or {timeout 1000}}]
     (and (deref requests-count-reached timeout true) @requests)))
 
 (defn recording-endpoint
