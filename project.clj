@@ -1,4 +1,4 @@
-(defproject standalone-test-server "0.2.1"
+(defproject standalone-test-server "0.2.2-SNAPSHOT"
   :description "A standalone server that can record requests for test"
   :url "https://github.com/Mayvenn/standalone-test-server"
   :license {:name "Eclipse Public License"
