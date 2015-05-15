@@ -8,12 +8,14 @@
 
 (defn- get-requests-wrapper
   [requests-count-reached requests]
-  (fn [& {:keys [timeout] :or {timeout 1000}}]
+  (fn [& [{:keys [timeout]
+          :or {timeout 1000}}]]
     (and (deref requests-count-reached timeout true) @requests)))
 
 (defn recording-endpoint
-  [& {:keys [request-count handler] :or {request-count 1
-                                         handler default-handler}}]
+  [& [{:keys [request-count handler]
+       :or {request-count 1
+            handler default-handler}}]]
   (let [requests (atom [])
         requests-count-reached (promise)]
     [(get-requests-wrapper requests-count-reached requests)
@@ -24,10 +26,8 @@
        (handler request))]))
 
 (defn standalone-server
-  ([handler]
-   (standalone-server handler {}))
-  ([handler opts]
-   (jetty/run-jetty handler (merge {:port 4334 :join? false} opts))))
+  [handler & [opts]]
+  (jetty/run-jetty handler (merge {:port 4334 :join? false} opts)))
 
 (defmacro with-resource
   [bindings close-fn & body]
