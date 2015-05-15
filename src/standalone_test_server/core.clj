@@ -20,7 +20,7 @@
         requests-count-reached (promise)]
     [(get-requests-wrapper requests-count-reached requests)
      (fn [request]
-       (swap! requests conj (assoc request :body (-> request (:body) (slurp))))
+       (swap! requests conj (assoc request :body (-> request :body slurp)))
        (when (>= (count @requests) request-count)
          (deliver requests-count-reached true))
        (handler request))]))

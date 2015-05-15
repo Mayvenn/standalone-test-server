@@ -8,14 +8,14 @@
   (let [[get-requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
       (http/get "http://localhost:4334/endpoint")
-      (is (= "/endpoint" (-> (get-requests) (first) (:uri)))))))
+      (is (= "/endpoint" (-> (get-requests) first :uri))))))
 
 (deftest recording-requests-with-body
   (let [[get-requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
       (http/post "http://localhost:4334/endpoint"
                  {:body (ByteArrayInputStream. (.getBytes "hello there"))})
-      (is (= "hello there" (-> (get-requests) (first) (:body)))))))
+      (is (= "hello there" (-> (get-requests) first :body))))))
 
 (deftest specifying-a-response-handler
   (let [response-handler (constantly {:status 201 :headers {}})
