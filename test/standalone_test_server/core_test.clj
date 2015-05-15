@@ -30,3 +30,9 @@
     (with-standalone-server [ss (standalone-server endpoint)]
       (http/get "http://localhost:4334/endpoint")
       (is (= 1 (count (get-requests :timeout 10))))))))
+
+(deftest running-on-different-port
+  (let [[get-requests endpoint] (recording-endpoint)]
+    (with-standalone-server [ss (standalone-server endpoint {:port 4335})]
+      (http/get "http://localhost:4335/endpoint")
+      (is (= 1 (count (get-requests :timeout 10)))))))
