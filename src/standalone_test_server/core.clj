@@ -1,11 +1,10 @@
 (ns standalone-test-server.core
   (:require [ring.adapter.jetty :as jetty]))
 
-(def default-response {:status 200
-                       :headers {}
-                       :body ""})
-
-(def default-handler (constantly default-response))
+(def ^:private default-handler
+  (constantly {:status 200
+               :headers {}
+               :body ""}))
 
 (defn- get-requests-wrapper
   [requests-count-reached requests]
