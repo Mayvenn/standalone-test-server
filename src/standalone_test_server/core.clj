@@ -7,7 +7,7 @@
 
 (def default-handler (constantly default-response))
 
-(defn get-requests-wrapper
+(defn- get-requests-wrapper
   [requests-count-reached requests]
   (fn [& {:keys [timeout] :or {timeout 1000}}]
     (and (deref requests-count-reached timeout true) @requests)))
