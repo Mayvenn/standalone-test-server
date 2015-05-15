@@ -29,16 +29,10 @@
   [handler & [opts]]
   (jetty/run-jetty handler (merge {:port 4334 :join? false} opts)))
 
-(defmacro with-resource
-  [bindings close-fn & body]
+(defmacro with-standalone-server
+  [bindings & body]
   `(let ~bindings
      (try
        ~@body
        (finally
-         (~close-fn ~(bindings 0))))))
-
-(defmacro with-standalone-server
-  [bindings & body]
-  `(with-resource ~bindings
-     .stop
-     ~@body))
+         (.stop ~(bindings 0))))))
