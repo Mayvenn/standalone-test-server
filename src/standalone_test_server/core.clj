@@ -23,7 +23,7 @@
                     a handler that returns status 200 with an empty body.
 
   Returns:
-  [recording-handler retrieve-requests]
+  [retrieve-requests recording-handler]
 
   retrieve-requests is a function that returns the recorded requests. As soon as the
   above request-count is reached, this function will return. If the request-count
