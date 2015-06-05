@@ -82,8 +82,9 @@ There are two optional arguments:
 You can override them by passing a map:
 
 ```clj
-(let [[retrieve-requests handler] (recording-endpoint {:request-count 2
-                                                       :handler (constantly {:status 201, :body "hi"})})]
+(let [[retrieve-requests handler]
+      (recording-endpoint {:request-count 2
+                           :handler (constantly {:status 201, :body "hi"})})]
   (with-standalone-server [s (standalone-server handler)]
     (is (= (:body (http/get "http://localhost:4334/endpoint"))
            "hi"))
