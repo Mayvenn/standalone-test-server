@@ -7,7 +7,7 @@ A simple HTTP ring handler to test HTTP requests.
 Instead of mocking or stubbing HTTP requests, this library can spawn a basic web server
 that run any ring handler while recording all incoming requests.
 
-We use it at Mayvenn to write tests with a simulated http api.
+We use it at Mayvenn to write tests with a simulated http api. We've written a short [blog post](http://engineering.mayvenn.com/2015/06/26/Testing-External-HTTP-Requests/) to help explain some of the motivation/reasoning behind this small library.
 
 ## Installation
 
