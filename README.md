@@ -34,7 +34,7 @@ There are only two functions and one macro. But they are usually used together t
 ### standalone-server
 
 A wrapper around [ring.adapter.jetty](https://github.com/ring-clojure/ring/tree/master/ring-jetty-adapter)'s
-run-jetty function. Simply passes through with a default port of `4334` and `:join false`.
+run-jetty function. Simply passes through with a default port of `4334` and `:join? false`.
 
 ```clj
 (let [server (standalone-server)]
