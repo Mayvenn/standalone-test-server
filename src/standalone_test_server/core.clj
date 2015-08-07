@@ -10,7 +10,7 @@
 (defn- get-requests-wrapper
   [requests-count-reached requests]
   (fn [& [{:keys [timeout]
-          :or {timeout 1000}}]]
+           :or {timeout 1000}}]]
     (and (deref requests-count-reached timeout true) @requests)))
 
 (defn recording-endpoint
@@ -69,8 +69,15 @@
       (http/get \"http://localhost:4334/endpoint\")
       (is (= 1 (count (retrieve-requests))))))"
   [bindings & body]
-  `(let ~bindings
-     (try
-       ~@body
-       (finally
-         (.stop ~(bindings 0))))))
+  (assert (vector? bindings) "bindings must be a vector")
+  (assert (even? (count bindings)) "bindings must be an even number of forms")
+  (cond
+    (zero? (count bindings))
+    `(do ~@body)
+
+    (symbol? (bindings 0))
+    `(let ~(subvec bindings 0 2)
+       (try
+         (with-standalone-server ~(subvec bindings 2) ~@body)
+         (finally
+           (.stop ~(bindings 0)))))))
