@@ -10,6 +10,7 @@
   :codox {:include standalone-test-server.core
           :src-dir-uri "http://github.com/Mayvenn/standalone-test-server/blob/master/"
           :src-linenum-anchor-prefix "L"}
+  :deploy-repositories [["releases" :clojars]]
   :profiles
   {:dev {:source-paths ["dev"]
          :dependencies [[clj-http "1.0.1"]
