@@ -1,6 +1,8 @@
 (ns standalone-test-server.core
   "Provides a ring handler that can record received requests."
-  (:require [ring.adapter.jetty :as jetty])
+  (:require [ring.adapter.jetty :as jetty]
+            [ring.util.codec :refer [form-decode]]
+            [clojure.string :as string])
   (:import [java.io ByteArrayInputStream]))
 
 (def ^:private default-handler
@@ -13,6 +15,54 @@
   (fn [& [{:keys [timeout]
            :or {timeout 1000}}]]
     (and (deref requests-count-reached timeout true) @requests)))
+
+(defn- wrap-query-params [request]
+  (assoc request :query-params
+         (into {}
+               (form-decode (or (:query-string request) "")))))
+
+(defn lazy-recording-endpoint
+  "Creates a ring handler that can record the requests it receives.
+
+  Options:
+  handler           The handler for the recording-endpoint to wrap. Defaults to
+                    a handler that returns status 200 with an empty body.
+
+  Returns:
+  [lazy-request-promises recording-handler]
+
+
+  lazy-request-promises is a lazy seq of promises that will resolve to a recorded requests.
+  The expected use case is to deref the promise with a timeout.
+
+  This will attempt to access the first request made. If the promise has not been
+  delivered yet, it will block for 1000ms.  If after 1000ms, the request has still not been made,
+  it will return nil.
+
+  The requests are standard ring requests except that the :body will be a string
+  instead of InputStream.
+
+  Example invocations:
+  ;;Waits for a single request for 1000ms
+  (let [[lazy-requests endpoint] (lazy-recording-endpoint)]
+    (deref (first lazy-requests) 1000 nil))
+
+  ;;Waits 1000ms each for two requests
+  (let [[lazy-requests endpoint] (lazy-recording-endpoint)]
+    (map #(deref % 1000 nil) (take 2 lazy-requests)))
+
+  ;; returns a 404 response to the http client that hits this endpoint
+  (lazy-recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
+  [& [{:keys [handler]
+       :or {handler default-handler}}]]
+  (let [requests (repeatedly promise)
+        request-count (atom 0)]
+    [(constantly requests)
+     (fn [request]
+       (deliver (nth requests @request-count)
+                (update-in (wrap-query-params request) [:body] slurp))
+       (swap! request-count inc)
+       (handler request))]))
 
 (defn recording-endpoint
   "Creates a ring handler that can record the requests it receives.
