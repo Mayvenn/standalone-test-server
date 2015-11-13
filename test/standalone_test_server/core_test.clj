@@ -17,6 +17,16 @@
                  {:body (ByteArrayInputStream. (.getBytes "hello there"))})
       (is (= "hello there" (-> (get-requests) first :body))))))
 
+(deftest recording-requests-preserves-input-stream-body-for-handler
+  (let [inner-handler-body (promise)
+        inner-handler (fn [req] (deliver inner-handler-body (:body req))
+                        {:status 200 :body ""})
+        [get-requests endpoint] (recording-endpoint {:handler inner-handler})]
+    (with-standalone-server [ss (standalone-server endpoint)]
+      (http/post "http://localhost:4334/endpoint"
+                 {:body (ByteArrayInputStream. (.getBytes "hello there"))})
+      (is (= "hello there" (slurp @inner-handler-body))))))
+
 (deftest specifying-a-response-handler
   (let [response-handler (constantly {:status 201 :headers {}})
         [_ endpoint] (recording-endpoint {:handler response-handler})]

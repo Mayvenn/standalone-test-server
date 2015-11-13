@@ -1,6 +1,7 @@
 (ns standalone-test-server.core
   "Provides a ring handler that can record received requests."
-  (:require [ring.adapter.jetty :as jetty]))
+  (:require [ring.adapter.jetty :as jetty])
+  (:import [java.io ByteArrayInputStream]))
 
 (def ^:private default-handler
   (constantly {:status 200
@@ -46,10 +47,11 @@
         requests-count-reached (promise)]
     [(get-requests-wrapper requests-count-reached requests)
      (fn [request]
-       (swap! requests conj (assoc request :body (-> request :body slurp)))
-       (when (>= (count @requests) request-count)
-         (deliver requests-count-reached true))
-       (handler request))]))
+       (let [body-contents (-> request :body slurp)]
+         (swap! requests conj (assoc request :body body-contents))
+         (when (>= (count @requests) request-count)
+           (deliver requests-count-reached true))
+         (handler (assoc request :body (ByteArrayInputStream. (.getBytes body-contents))))))]))
 
 (defn standalone-server
   "Wrapper to start a standalone server through ring-jetty. Takes a ring handler
