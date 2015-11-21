@@ -16,5 +16,5 @@
   :profiles
   {:dev {:source-paths ["dev"]
          :dependencies [[clj-http "1.0.1"]
-                        [org.clojure/tools.namespace "0.2.9e]]}})
+                        [org.clojure/tools.namespace "0.2.9"]]}})
 
