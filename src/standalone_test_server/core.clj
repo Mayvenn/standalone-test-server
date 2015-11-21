@@ -12,12 +12,6 @@
 
 (def ^:private default-timeout 500)
 
-(defn- get-requests-wrapper
-  [requests-count-reached requests]
-  (fn [& [{:keys [timeout]
-           :or {timeout 1000}}]]
-    (and (deref requests-count-reached timeout true) @requests)))
-
 (defn- wrap-query-params [request]
   (assoc request :query-params
          (into {}
@@ -36,31 +30,32 @@
   handler           The handler for the recording-endpoint to wrap. Defaults to
                     a handler that returns status 200 with an empty body.
 
+  timeout           The timeout period for blocking on requests.  Defualt: 500ms
+
   Returns:
-  [lazy-request-promises recording-handler]
+  [requests recording-handler]
 
 
-  lazy-request-promises is a lazy seq of promises that will resolve to a recorded requests.
-  The expected use case is to deref the promise with a timeout.
-
-  This will attempt to access the first request made. If the promise has not been
-  delivered yet, it will block for 1000ms.  If after 1000ms, the request has still not been made,
-  it will return nil.
+  lazy-request-promises is a lazy seq of promises that a recorded requests.
+  Instead of returning lazy-request-promises, a lazy-seq is returned.  This lazy seq
+  will attempt to derefence the next request as it iterates the infinite seq of
+  promises. When it attempts to deref the next promise, it will block for the timeout
+  period (in milliseconds).  If deref timesout, the lazy-seq will be terminated.
 
   The requests are standard ring requests except that the :body will be a string
   instead of InputStream.
 
   Example invocations:
   ;;Waits for a single request for 1000ms
-  (let [[lazy-requests endpoint] (lazy-recording-endpoint)]
-    (deref (first lazy-requests) 1000 nil))
+  (let [[requests endpoint] (recording-endpoint {:timeout 1000})]
+    (first requests))
 
   ;;Waits 1000ms each for two requests
-  (let [[lazy-requests endpoint] (lazy-recording-endpoint)]
-    (map #(deref % 1000 nil) (take 2 lazy-requests)))
+  (let [[requests endpoint] (recording-endpoint {:timeout 1000})]
+    (take 2 requests))
 
   ;; returns a 404 response to the http client that hits this endpoint
-  (lazy-recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
+  (recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
   [& [{:keys [handler timeout]
        :or {handler default-handler
             timeout default-timeout}}]]
@@ -88,10 +83,10 @@
   "A convenience macro to ensure a standalone-server is stopped.
 
   Example with standalone-server and recording-endpoint:
-  (let [[retrieve-requests endpoint] (recording-endpoint)]
+  (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [server (standalone-server endpoint)]
       (http/get \"http://localhost:4334/endpoint\")
-      (is (= 1 (count (retrieve-requests))))))"
+      (is (= 1 (count requests)))))"
   [bindings & body]
   (assert (vector? bindings) "bindings must be a vector")
   (assert (even? (count bindings)) "bindings must be an even number of forms")
