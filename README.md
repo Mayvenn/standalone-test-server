@@ -62,31 +62,46 @@ This macro removes the boilerplate of let-try-finally. It assumes the first bind
 
 This function is a ring middleware that records all requests that pass through it.
 Unlike regular middleware, this function will return a vector of the handler and
-the function you can call to retrieve the recorded requests.
+a lazy sequence of requests.
 
 ```clj
-(let [[retrieve-requests handler] (recording-endpoint)]
+(let [[requests handler] (recording-endpoint)]
   (with-standalone-server [s (standalone-server handler)]
     (http/get "http://localhost:4334/endpoint")
-    (is (= 1 (count (retrieve-requests))))))
+    (is (= 1 (count requests)))))
 ```
 
-By default, the recording endpoint's `retrieve-request` function will wait up to a
-second for one request to be received.
+Upon iteration, the requests sequence will dereference underlying request futures timing out and
+terminating the sequence if unable to dereference a request, most likely caused by the next request never being made.
 
 There are two optional arguments:
 
-- `:request-count` the number of requests to capture before letting the `retrieve-requests` return successfully
+- `:timeout` the period of time (in milliseconds) to wait while dereferencing the next request before timing out and terminating the lazy-seq of requests
 - `:handler` the underlying ring handler to call. If none is provided, it uses a default that returns a 200 empty body response.
 
 You can override them by passing a map:
 
 ```clj
 (let [[retrieve-requests handler]
-      (recording-endpoint {:request-count 2
+      (recording-endpoint {:timeout 5000
                            :handler (constantly {:status 201, :body "hi"})})]
   (with-standalone-server [s (standalone-server handler)]
     (is (= (:body (http/get "http://localhost:4334/endpoint"))
            "hi"))
-    (is (= 1 (count (retrieve-requests))))))
+    (is (= 1 (count retrieve-requests)))))
 ```
+
+### Query Namespace
+
+This namespace contains a list of helper filters.
+
+| Name                  | Params      | Includes                                                      | 
+| --------------------- | ----------- | ------------------------------------------------------------- |
+| with-uri              | uri col     | Matches uri the request's uri                                 |
+| with-method           | method col  | Matches method the request's method                           |
+| with-query-keys       | key-set col | Matches key-set to the parsed query-string's keys             |
+| with-query-key-subset | key-set col | Where key-set is a subset of the parsed query-string's keys   |
+| with-query-params     | kv-map col  | Matches kv-map to the parsed query-string                     |
+| with-body-keys        | key-set col | Matches key-set to the parsed body's keys                     |
+| with-body-key-subset  | key-set col | Where key-set is a subset of the parsed body keys             |
+| with-body             | kv-map      | Matches kv-map to the parsed body                             |
