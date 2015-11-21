@@ -80,9 +80,9 @@
 (deftest query-by-with-json-body-keys
   (let [requests [(assoc json-body-request-fixture :body "{\"not_test\":\"value\"}")
                   json-body-request-fixture]]
-    (is (= [json-body-request-fixture ]
+    (is (= [json-body-request-fixture]
            (->> requests
-                (with-body-keys #{"test"}))))))
+                (with-body-key-subset #{"test"}))))))
 
 (deftest query-by-json-body-eq
   (let [requests [(assoc json-body-request-fixture :body "{\"test\":\"not_value\", \"second_test\":\"second_value\"}")
@@ -104,7 +104,7 @@
                   form-body-request-fixture]]
     (is (= [form-body-request-fixture ]
            (->> requests
-                (with-body-keys #{"test"}))))))
+                (with-body-key-subset #{"test"}))))))
 
 (deftest query-by-form-body-eq
   (let [requests [(assoc json-body-request-fixture :body "{\"test\":\"not_value\"}")
@@ -120,15 +120,15 @@
       (http/post "http://localhost:4334/endpoint?a=b"
                  {:headers {:content-type "application/json"}
                   :body (ByteArrayInputStream. (.getBytes "{\"test\":\"value\"}"))})
+      (http/get "http://localhost:4334/endpoint"
+                 {})
       (http/post "http://localhost:4334/endpoint"
                  {:headers {:content-type "application/x-www-form-urlencoded"}
                   :body (ByteArrayInputStream. (.getBytes "test=value&second_test=second_value"))})
-      (http/get "http://localhost:4334/endpoint"
-                 {})
       (http/get "http://localhost:4334/not_endpoint?c=d"
                  {})
       (is (= ["{\"test\":\"value\"}" "test=value&second_test=second_value"]
              (->> get-requests
-                  (with-body-keys #{"test"})
+                  (with-body-key-subset #{"test"})
                   (with-method :post)
                   (map :body)))))))
