@@ -5,71 +5,41 @@
             [clj-http.client :as http])
   (:import [java.io ByteArrayInputStream]))
 
-(deftest lazy-recording-requests-with-body
-  (let [[get-requests endpoint] (lazy-recording-endpoint)]
+(deftest recording-requests-with-body
+  (let [[get-requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
       (http/post "http://localhost:4334/endpoint?a=b"
                  {:body (ByteArrayInputStream. (.getBytes "{\"test\":\"value\"}"))})
-      (->> (get-requests)
-           (take 5)
-           (map #(deref % 1000 nil))
-           (map :body)))))
+      (is (= "{\"test\":\"value\"}" (->> get-requests
+                                         (take 2)
+                                         (first)
+                                         :body))))))
 
-(deftest lazy-recording-several-requests-with-body
-  (let [[get-requests endpoint] (lazy-recording-endpoint)]
+(deftest recording-several-requests-with-body
+  (let [[get-requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
       (dotimes [n 5] (http/post "http://localhost:4334/endpoint"
                                 {:body (ByteArrayInputStream. (.getBytes (str "hello there #" n)))}))
-      (is (= ["hello there #0"
-              "hello there #1"
-              "hello there #2"
-              "hello there #3"
-              "hello there #4"] (->> (get-requests)
-                                     (take 5)
-                                     (map #(deref % 1000 nil))
-                                     (map :body)))))))
+      (is (= '("hello there #0"
+               "hello there #1"
+               "hello there #2"
+               "hello there #3"
+               "hello there #4")
+             (->> get-requests
+                  (take 5)
+                  (map :body)))))))
 
-(deftest lazy-recording-without-a-request-returns-a-never-resolved-promise
-  (let [[get-requests endpoint] (lazy-recording-endpoint)]
+(deftest recording-without-a-request-returns-a-never-resolved-promise
+  (let [[get-requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
-      (is (= nil (-> (get-requests)
-                     first
-                     (deref 1000 nil)))))))
-
-(deftest lazy-recording-with-a-handler
-  (let [request-handler {:handler (constantly {:status 201 :headers {}})}
-        [get-requests endpoint] (lazy-recording-endpoint request-handler)]
-    (with-standalone-server [ss (standalone-server endpoint)]
-      (let [resp (http/get "http://localhost:4334/endpoint")]
-        (is (= 201 (:status resp)))))))
-
-(deftest lazy-recording-parses-no-query-params-as-empty-map
-  (let [[get-requests endpoint] (lazy-recording-endpoint)]
-    (with-standalone-server [ss (standalone-server endpoint)]
-      (let [resp (http/get "http://localhost:4334/endpoint")]
-        (is (= {}
-               (-> (get-requests)
-                   first
-                   (deref 1000 nil)
-                   :query-params)))))))
-
-(deftest lazy-recording-parses-query-params
-  (let [[get-requests endpoint] (lazy-recording-endpoint)]
-    (with-standalone-server [ss (standalone-server endpoint)]
-      (let [resp (http/get "http://localhost:4334/endpoint?hello=world&array=0&array=2&array=3")]
-        (is (= {"hello" "world"
-                "array" ["0" "2" "3"]}
-               (-> (get-requests)
-                   first
-                   (deref 1000 nil)
-                   :query-params)))))))
+      (is (= '() get-requests)))))
 
 (deftest recording-parses-no-query-params-as-empty-map
   (let [[get-requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
       (let [resp (http/get "http://localhost:4334/endpoint")]
         (is (= {}
-               (-> (get-requests)
+               (-> get-requests
                    first
                    :query-params)))))))
 
@@ -79,7 +49,7 @@
       (let [resp (http/get "http://localhost:4334/endpoint?hello=world&array=0&array=2&array=3")]
         (is (= {"hello" "world"
                 "array" ["0" "2" "3"]}
-               (-> (get-requests)
+               (-> get-requests
                    first
                    :query-params)))))))
 
@@ -87,14 +57,14 @@
   (let [[get-requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
       (http/get "http://localhost:4334/endpoint")
-      (is (= "/endpoint" (-> (get-requests) first :uri))))))
+      (is (= "/endpoint" (-> get-requests first :uri))))))
 
 (deftest recording-requests-with-body
   (let [[get-requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
       (http/post "http://localhost:4334/endpoint"
                  {:body (ByteArrayInputStream. (.getBytes "hello there"))})
-      (is (= "hello there" (-> (get-requests) first :body))))))
+      (is (= "hello there" (-> get-requests first :body))))))
 
 (deftest recording-requests-preserves-input-stream-body-for-handler
   (let [inner-handler-body (promise)
@@ -118,14 +88,14 @@
     (let [[get-requests endpoint] (recording-endpoint {:request-count 2})]
       (with-standalone-server [ss (standalone-server endpoint)]
         (http/get "http://localhost:4334/endpoint")
-        (is (= 1 (count (get-requests {:timeout 10}))))))))
+        (is (= 1 (count get-requests)))))))
 
 (deftest running-on-different-port
   (let [[get-requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint {:port 4335})]
       (http/post "http://localhost:4335/endpoint?hello=world&a=b&array[]=4" {:headers {:content-type "application/json"}
                                                                              :body (ByteArrayInputStream. (.getBytes "{'hello':'wolrd'}"))})
-      (is (= 1 (count (get-requests {:timeout 10})))))))
+      (is (= 1 (count get-requests))))))
 
 (deftest specifying-multiple-servers-together
   (testing "with-standalone-server allows multiple server bindings"
@@ -134,8 +104,8 @@
                                s2 (standalone-server endpoint {:port 4335})]
         (http/get "http://localhost:4334/endpoint")
         (http/get "http://localhost:4335/endpoint")
-        (is (= "/endpoint" (-> (get-requests) first :uri)))
-        (is (= 2 (count (get-requests)))))
+        (is (= "/endpoint" (-> get-requests first :uri)))
+        (is (= 2 (count get-requests))))
 
       (testing "while properly shutting the servers down"
         (is (thrown? java.net.ConnectException

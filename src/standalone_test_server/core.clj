@@ -10,6 +10,8 @@
                :headers {}
                :body ""}))
 
+(def ^:private default-timeout 500)
+
 (defn- get-requests-wrapper
   [requests-count-reached requests]
   (fn [& [{:keys [timeout]
@@ -21,7 +23,13 @@
          (into {}
                (form-decode (or (:query-string request) "")))))
 
-(defn lazy-recording-endpoint
+(defn lazy-request-list [col timeout]
+  (lazy-seq (if-let [next (and (first col)
+                               (deref (first col) timeout nil))]
+              (cons next (lazy-request-list (rest col) timeout))
+              '())))
+
+(defn recording-endpoint
   "Creates a ring handler that can record the requests it receives.
 
   Options:
@@ -53,54 +61,18 @@
 
   ;; returns a 404 response to the http client that hits this endpoint
   (lazy-recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
-  [& [{:keys [handler]
-       :or {handler default-handler}}]]
+  [& [{:keys [handler timeout]
+       :or {handler default-handler
+            timeout default-timeout}}]]
   (let [requests (repeatedly promise)
         request-count (atom 0)]
-    [(constantly requests)
+    [(lazy-request-list requests timeout)
      (fn [request]
-       (deliver (nth requests @request-count)
-                (update-in (wrap-query-params request) [:body] slurp))
-       (swap! request-count inc)
-       (handler request))]))
-
-(defn recording-endpoint
-  "Creates a ring handler that can record the requests it receives.
-
-  Options:
-  request-count     Number of requests to wait for before retrieve-requests returns.
-                    Defaults to 1.
-  handler           The handler for the recording-endpoint to wrap. Defaults to
-                    a handler that returns status 200 with an empty body.
-
-  Returns:
-  [retrieve-requests recording-handler]
-
-  retrieve-requests is a function that returns the recorded requests. As soon as the
-  above request-count is reached, this function will return. If the request-count
-  is not reached, retrieve-requests will return all recorded requests so far after a
-  timeout. The timeout is 1000 ms by default and can be customized at invocation:
-    (retrieve-requests {:timeout 1500})
-  The requests are standard ring requests except that the :body will be a string
-  instead of InputStream.
-
-  Example invocations:
-  ;; waits for two requests or timeout
-  (recording-endpoint {:request-count 2})
-
-  ;; returns a 404 response to the http client that hits this endpoint
-  (recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
-  [& [{:keys [request-count handler]
-       :or {request-count 1
-            handler default-handler}}]]
-  (let [requests (atom [])
-        requests-count-reached (promise)]
-    [(get-requests-wrapper requests-count-reached requests)
-     (fn [request]
-       (let [body-contents (-> request :body slurp)]
-         (swap! requests conj (assoc request :body body-contents))
-         (when (>= (count @requests) request-count)
-           (deliver requests-count-reached true))
+       (let [request (wrap-query-params request)
+             body-contents (-> request :body slurp)]
+         (deliver (nth requests @request-count)
+                  (assoc request :body body-contents))
+         (swap! request-count inc)
          (handler (assoc request :body (ByteArrayInputStream. (.getBytes body-contents))))))]))
 
 (defn standalone-server
