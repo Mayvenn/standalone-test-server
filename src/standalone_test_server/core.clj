@@ -1,6 +1,8 @@
 (ns standalone-test-server.core
   "Provides a ring handler that can record received requests."
-  (:require [ring.adapter.jetty :as jetty])
+  (:require [ring.adapter.jetty :as jetty]
+            [ring.util.codec :refer [form-decode]]
+            [clojure.string :as string])
   (:import [java.io ByteArrayInputStream]))
 
 (def ^:private default-handler
@@ -8,50 +10,64 @@
                :headers {}
                :body ""}))
 
-(defn- get-requests-wrapper
-  [requests-count-reached requests]
-  (fn [& [{:keys [timeout]
-           :or {timeout 1000}}]]
-    (and (deref requests-count-reached timeout true) @requests)))
+(def ^:private default-timeout 500)
+
+(defn ^:private lazy-request-list [col timeout]
+  (lazy-seq (if-let [next (and (first col)
+                               (deref (first col) timeout nil))]
+              (cons next (lazy-request-list (rest col) timeout))
+              '())))
 
 (defn recording-endpoint
   "Creates a ring handler that can record the requests it receives.
 
   Options:
-  request-count     Number of requests to wait for before retrieve-requests returns.
-                    Defaults to 1.
   handler           The handler for the recording-endpoint to wrap. Defaults to
                     a handler that returns status 200 with an empty body.
 
-  Returns:
-  [retrieve-requests recording-handler]
+  timeout           The timeout period for blocking on requests.  Default: 500ms
 
-  retrieve-requests is a function that returns the recorded requests. As soon as the
-  above request-count is reached, this function will return. If the request-count
-  is not reached, retrieve-requests will return all recorded requests so far after a
-  timeout. The timeout is 1000 ms by default and can be customized at invocation:
-    (retrieve-requests {:timeout 1500})
+  Returns:
+  [requests recording-handler]
+
+
+  lazy-request-promises is a lazy seq of promises of recorded requests.
+  Instead of returning lazy-request-promises, a lazy-seq is returned.  This lazy seq
+  will attempt to derefence the next request as it iterates the infinite seq of
+  promises. When it attempts to deref the next promise, it will block for the timeout
+  period (in milliseconds).  If deref timesout, the lazy-seq will be terminated.
+
   The requests are standard ring requests except that the :body will be a string
   instead of InputStream.
 
   Example invocations:
-  ;; waits for two requests or timeout
-  (recording-endpoint {:request-count 2})
+  ;; Waits for a single request for 1000ms
+  (let [[requests endpoint] (recording-endpoint {:timeout 1000})]
+    (first requests))
 
-  ;; returns a 404 response to the http client that hits this endpoint
+  ;; Waits 1000ms each for two requests
+  (let [[requests endpoint] (recording-endpoint {:timeout 1000})]
+    (take 2 requests))
+
+  ;; Returns a 404 response to the http client that hits this endpoint
   (recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
-  [& [{:keys [request-count handler]
-       :or {request-count 1
-            handler default-handler}}]]
-  (let [requests (atom [])
-        requests-count-reached (promise)]
-    [(get-requests-wrapper requests-count-reached requests)
+  [& [{:keys [handler timeout]
+       :or {handler default-handler
+            timeout default-timeout}}]]
+  (let [requests (repeatedly promise)
+        request-count (atom 0)]
+    [(lazy-request-list requests timeout)
      (fn [request]
-       (let [body-contents (-> request :body slurp)]
-         (swap! requests conj (assoc request :body body-contents))
-         (when (>= (count @requests) request-count)
-           (deliver requests-count-reached true))
-         (handler (assoc request :body (ByteArrayInputStream. (.getBytes body-contents))))))]))
+       (let [request (assoc request
+                            :body (-> request :body slurp)
+                            :query-params (into {}
+                                                (some->> request
+                                                         :query-string
+                                                         form-decode)))]
+         (deliver (nth requests @request-count)
+                  request)
+         (swap! request-count inc)
+         (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))))]))
 
 (defn standalone-server
   "Wrapper to start a standalone server through ring-jetty. Takes a ring handler
@@ -66,10 +82,10 @@
   "A convenience macro to ensure a standalone-server is stopped.
 
   Example with standalone-server and recording-endpoint:
-  (let [[retrieve-requests endpoint] (recording-endpoint)]
+  (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [server (standalone-server endpoint)]
       (http/get \"http://localhost:4334/endpoint\")
-      (is (= 1 (count (retrieve-requests))))))"
+      (is (= 1 (count requests)))))"
   [bindings & body]
   (assert (vector? bindings) "bindings must be a vector")
   (assert (even? (count bindings)) "bindings must be an even number of forms")
