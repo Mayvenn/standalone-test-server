@@ -12,12 +12,7 @@
 
 (def ^:private default-timeout 500)
 
-(defn- wrap-query-params [request]
-  (assoc request :query-params
-         (into {}
-               (form-decode (or (:query-string request) "")))))
-
-(defn lazy-request-list [col timeout]
+(defn ^:private lazy-request-list [col timeout]
   (lazy-seq (if-let [next (and (first col)
                                (deref (first col) timeout nil))]
               (cons next (lazy-request-list (rest col) timeout))
@@ -63,12 +58,16 @@
         request-count (atom 0)]
     [(lazy-request-list requests timeout)
      (fn [request]
-       (let [request (wrap-query-params request)
-             body-contents (-> request :body slurp)]
+       (let [request (assoc request
+                            :body (-> request :body slurp)
+                            :query-params (into {}
+                                                (some->> request
+                                                         :query-string
+                                                         form-decode)))]
          (deliver (nth requests @request-count)
-                  (assoc request :body body-contents))
+                  request)
          (swap! request-count inc)
-         (handler (assoc request :body (ByteArrayInputStream. (.getBytes body-contents))))))]))
+         (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))))]))
 
 (defn standalone-server
   "Wrapper to start a standalone server through ring-jetty. Takes a ring handler
