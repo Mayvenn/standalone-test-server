@@ -25,13 +25,13 @@
   handler           The handler for the recording-endpoint to wrap. Defaults to
                     a handler that returns status 200 with an empty body.
 
-  timeout           The timeout period for blocking on requests.  Defualt: 500ms
+  timeout           The timeout period for blocking on requests.  Default: 500ms
 
   Returns:
   [requests recording-handler]
 
 
-  lazy-request-promises is a lazy seq of promises that a recorded requests.
+  lazy-request-promises is a lazy seq of promises of recorded requests.
   Instead of returning lazy-request-promises, a lazy-seq is returned.  This lazy seq
   will attempt to derefence the next request as it iterates the infinite seq of
   promises. When it attempts to deref the next promise, it will block for the timeout
@@ -41,15 +41,15 @@
   instead of InputStream.
 
   Example invocations:
-  ;;Waits for a single request for 1000ms
+  ;; Waits for a single request for 1000ms
   (let [[requests endpoint] (recording-endpoint {:timeout 1000})]
     (first requests))
 
-  ;;Waits 1000ms each for two requests
+  ;; Waits 1000ms each for two requests
   (let [[requests endpoint] (recording-endpoint {:timeout 1000})]
     (take 2 requests))
 
-  ;; returns a 404 response to the http client that hits this endpoint
+  ;; Returns a 404 response to the http client that hits this endpoint
   (recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
   [& [{:keys [handler timeout]
        :or {handler default-handler
