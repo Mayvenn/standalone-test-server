@@ -13,7 +13,7 @@
    "application/xml" xml-parser
    "text/xml" xml-parser
    "application/x-www-form-urlencoded" form-parser
-   nil {}})
+   nil identity})
 
 (defn ^:private compare-in [m keypath comp-fn val]
   (comp-fn val (get m keypath)))
