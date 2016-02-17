@@ -14,7 +14,7 @@ We use it at Mayvenn to write tests with a simulated http api. We've written a s
 Add this line to your `:dependencies` key for your project.clj:
 
 ```clj
-[standalone-test-server "0.3.0"]
+[standalone-test-server "0.5.0"]
 ```
 
 Then you can require it using:
