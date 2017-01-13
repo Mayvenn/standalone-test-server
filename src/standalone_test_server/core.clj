@@ -18,6 +18,10 @@
               (cons next (lazy-request-list (rest col) timeout))
               '())))
 
+(defn ^:private save-request [unfulfilled-promises request-to-save]
+  (deliver (first unfulfilled-promises) request-to-save)
+  (rest unfulfilled-promises))
+
 (defn recording-endpoint
   "Creates a ring handler that can record the requests it receives.
 
@@ -55,7 +59,7 @@
        :or {handler default-handler
             timeout default-timeout}}]]
   (let [requests (repeatedly promise)
-        request-count (atom 0)]
+        recorder (agent requests)]
     [(lazy-request-list requests timeout)
      (fn [request]
        (let [request (assoc request
@@ -64,9 +68,7 @@
                                                 (some->> request
                                                          :query-string
                                                          form-decode)))]
-         (deliver (nth requests @request-count)
-                  request)
-         (swap! request-count inc)
+         (send recorder save-request request)
          (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))))]))
 
 (defn standalone-server

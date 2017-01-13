@@ -5,6 +5,10 @@
             [clj-http.client :as http])
   (:import [java.io ByteArrayInputStream]))
 
+(defn ^:private thread-run [f]
+  (doto (Thread. f)
+    (.start)))
+
 (deftest recording-requests-with-body
   (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
@@ -28,6 +32,23 @@
              (->> requests
                   (take 5)
                   (map :body)))))))
+
+(deftest recording-concurrent-requests-accurately
+  (let [[requests endpoint] (recording-endpoint)]
+    (with-standalone-server [ss (standalone-server endpoint)]
+      (dotimes [n 5]
+        (thread-run
+         #(http/post "http://localhost:4334/endpoint"
+                     {:body (ByteArrayInputStream. (.getBytes (str "hello there #" n)))})))
+      (is (= #{"hello there #0"
+               "hello there #1"
+               "hello there #2"
+               "hello there #3"
+               "hello there #4"}
+             (->> requests
+                  (take 5)
+                  (map :body)
+                  (set)))))))
 
 (deftest recording-without-a-request-returns-a-never-resolved-promise
   (let [[requests endpoint] (recording-endpoint)]
