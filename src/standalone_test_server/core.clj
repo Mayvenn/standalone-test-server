@@ -12,15 +12,38 @@
 
 (def ^:private default-timeout 500)
 
-(defn ^:private lazy-request-list [col timeout]
-  (lazy-seq (if-let [next (and (first col)
-                               (deref (first col) timeout nil))]
-              (cons next (lazy-request-list (rest col) timeout))
-              '())))
+(defn assert-requests
+  "Blocks until the given atom satisfies a predicate or the timeout has been reached.
 
-(defn ^:private save-request [unfulfilled-promises request-to-save]
-  (deliver (first unfulfilled-promises) request-to-save)
-  (rest unfulfilled-promises))
+  If the timeout has been reached an AssertionError will be thrown.
+
+  The predicate function takes the state of the atom as the only argument. When
+  the predicate returns true, then `assert-requests' will return successfully.
+
+  Also note that the predicate function may be called on multiple threads simultaneously.
+
+  ;; req-atom must have at least 2 requests before 3 seconds have elapsed.
+  (assert-requests req-atom #(>= 2 (count %)) {:timeout 3000})
+  "
+  ([requests-atom pred] (assert-requests requests-atom pred {}))
+  ([requests-atom pred {:keys [timeout]
+                        :or {timeout default-timeout}}]
+   (let [prom (promise)
+         id   (gensym)]
+     (add-watch requests-atom id (fn [_ _ _ new-state]
+                                   (when (pred new-state)
+                                     (deliver prom true))))
+     (let [met? (deref prom timeout false)]
+       (remove-watch requests-atom id)
+       (when-not met?
+         (throw (AssertionError. "Failed to satisfy condition for requests within timeout")))))))
+
+(defn assert-requests-count
+  "Convenience for calling (assert-requests req-atom #(<= min-count (count %)) options)"
+  ([requests-atom min-count]
+   (assert-requests-count requests-atom min-count {}))
+  ([requests-atom min-count options]
+   (assert-requests requests-atom #(<= min-count (count %)) options)))
 
 (defn recording-endpoint
   "Creates a ring handler that can record the requests it receives.
@@ -29,38 +52,35 @@
   handler           The handler for the recording-endpoint to wrap. Defaults to
                     a handler that returns status 200 with an empty body.
 
-  timeout           The timeout period for blocking on requests.  Default: 500ms
-
   Returns:
-  [requests recording-handler]
+  [requests-atom recording-handler]
 
 
-  lazy-request-promises is a lazy seq of promises of recorded requests.
-  Instead of returning lazy-request-promises, a lazy-seq is returned.  This lazy seq
-  will attempt to derefence the next request as it iterates the infinite seq of
-  promises. When it attempts to deref the next promise, it will block for the timeout
-  period (in milliseconds).  If deref timesout, the lazy-seq will be terminated.
+  Returns an atom that contains a vector of requests received by the recording-handler.
+
+  If you need to ensure a condition of the requests-atom is satisfied before
+  deref-ing it, use `assert-requests`.
 
   The requests are standard ring requests except that the :body will be a string
   instead of InputStream.
 
   Example invocations:
   ;; Waits for a single request for 1000ms
-  (let [[requests endpoint] (recording-endpoint {:timeout 1000})]
-    (first requests))
+  (let [[req-atom endpoint] (recording-endpoint)]
+    (assert-requests req-atom first {:timeout 1000})
+    (first @req-atom))
 
-  ;; Waits 1000ms each for two requests
-  (let [[requests endpoint] (recording-endpoint {:timeout 1000})]
-    (take 2 requests))
+  ;; Waits up to 1000ms for two requests
+  (let [[req-atom endpoint] (recording-endpoint {:timeout 1000})]
+    (assert-requests req-atom second {:timeout 1000})
+    (take 2 @req-atom))
 
   ;; Returns a 404 response to the http client that hits this endpoint
   (recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
-  [& [{:keys [handler timeout]
-       :or {handler default-handler
-            timeout default-timeout}}]]
-  (let [requests (repeatedly promise)
-        recorder (agent requests)]
-    [(lazy-request-list requests timeout)
+  [& [{:keys [handler]
+       :or {handler default-handler}}]]
+  (let [requests-atom (atom [])]
+    [requests-atom
      (fn [request]
        (let [request (assoc request
                             :body (-> request :body slurp)
@@ -68,7 +88,7 @@
                                                 (some->> request
                                                          :query-string
                                                          form-decode)))]
-         (send recorder save-request request)
+         (swap! requests-atom conj request)
          (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))))]))
 
 (defn standalone-server
