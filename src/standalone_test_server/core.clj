@@ -22,8 +22,8 @@
 
   Also note that the predicate function may be called on multiple threads simultaneously.
 
-  ;; req-atom must have at least 2 requests before 3 seconds have elapsed.
-  (assert-requests req-atom #(>= 2 (count %)) {:timeout 3000})
+  ;; Reports whether req-atom has at least 2 requests before 3 seconds have elapsed.
+  (requests-meet? req-atom #(>= 2 (count %)) {:timeout 3000})
   "
   ([requests-atom pred] (requests-meet? requests-atom pred {}))
   ([requests-atom pred {:keys [timeout]
@@ -38,6 +38,20 @@
        (remove-watch requests-atom id)
        met?))))
 
+(defn requests-count?
+  "Convenience for calling (requests-meet? req-atom #(= exact-count (count %)) options)"
+  ([requests-atom exact-count]
+   (requests-count? requests-atom exact-count {}))
+  ([requests-atom exact-count options]
+   (requests-meet? requests-atom #(= exact-count (count %)) options)))
+
+(defn requests-min-count?
+  "Convenience for calling (requests-meet? req-atom #(<= min-count (count %)) options)"
+  ([requests-atom min-count]
+   (requests-min-count? requests-atom min-count {}))
+  ([requests-atom min-count options]
+   (requests-meet? requests-atom #(<= min-count (count %)) options)))
+
 (defn requests-quiescent
   "Blocks until the given requests atom has stopped growing for `for-ms`
 
@@ -48,33 +62,6 @@
    (loop [len (count @requests-atom)]
      (when-let [grown? (requests-meet? requests-atom #(< len (count %)) {:timeout for-ms})]
        (recur (count @requests-atom))))))
-
-(defn assert-requests
-  "Blocks until the `requests-meet?` the predicate or the timeout has been reached.
-
-  If the timeout has been reached an AssertionError will be thrown.
-
-  ;; req-atom must have at least 2 requests before 3 seconds have elapsed.
-  (assert-requests req-atom #(>= 2 (count %)) {:timeout 3000})
-  "
-  ([requests-atom pred] (assert-requests requests-atom pred {}))
-  ([requests-atom pred opts]
-   (when-not (requests-meet? requests-atom pred opts)
-     (throw (AssertionError. "Failed to satisfy condition for requests within timeout")))))
-
-(defn assert-requests-min-count
-  "Convenience for calling (assert-requests req-atom #(<= min-count (count %)) options)"
-  ([requests-atom min-count]
-   (assert-requests-min-count requests-atom min-count {}))
-  ([requests-atom min-count options]
-   (assert-requests requests-atom #(<= min-count (count %)) options)))
-
-(defn assert-requests-count
-  "Convenience for calling (assert-requests req-atom #(= exact-count (count %)) options)"
-  ([requests-atom exact-count]
-   (assert-requests-count requests-atom exact-count {}))
-  ([requests-atom exact-count options]
-   (assert-requests requests-atom #(= exact-count (count %)) options)))
 
 (defn recording-endpoint
   "Creates a ring handler that can record the requests it receives.
@@ -90,7 +77,7 @@
   Returns an atom that contains a vector of requests received by the recording-handler.
 
   If you need to ensure a condition of the requests-atom is satisfied before
-  deref-ing it, use `requests-meet?`, `assert-requests` or a related helper.
+  deref-ing it, use `requests-meet?`, `requests-count?` or a related helper.
 
   The requests are standard ring requests except that the :body will be a string
   instead of InputStream.
@@ -98,12 +85,12 @@
   Example invocations:
   ;; Waits for a single request for 1000ms
   (let [[req-atom endpoint] (recording-endpoint)]
-    (assert-requests req-atom first {:timeout 1000})
+    (is (requests-meet? req-atom first {:timeout 1000}))
     (first @req-atom))
 
   ;; Waits up to 1000ms for two requests
   (let [[req-atom endpoint] (recording-endpoint {:timeout 1000})]
-    (assert-requests req-atom second {:timeout 1000})
+    (is (requests-meet? req-atom second {:timeout 1000}))
     (take 2 @req-atom))
 
   ;; Returns a 404 response to the http client that hits this endpoint
@@ -138,8 +125,7 @@
   (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [server (standalone-server endpoint)]
       (http/get \"http://localhost:4334/endpoint\")
-      (requests-quiescent requests {:for-ms 50})
-      (is (= 1 (count @requests)))))"
+      (is (requests-count? requests 1))))"
   [bindings & body]
   (assert (vector? bindings) "bindings must be a vector")
   (assert (even? (count bindings)) "bindings must be an even number of forms")

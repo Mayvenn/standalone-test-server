@@ -34,10 +34,10 @@
                   (take 5)
                   (map :body)))))))
 
-(deftest assert-requests-throws-exception-if-timeout-is-reached
+(deftest requests-meet?-returns-false-if-timeout-is-reached
   (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
-      (is (thrown? AssertionError (assert-requests requests #(<= 5 (count %)) {:timeout 10}))))))
+      (is (not (requests-meet? requests #(<= 5 (count %)) {:timeout 10}))))))
 
 (deftest waiting-until-requests-quiescent
   (let [[requests endpoint] (recording-endpoint)]
@@ -57,10 +57,17 @@
       (requests-quiescent requests {:for-ms 50})
       (is (= 2 (count @requests))))))
 
-(deftest assert-requests-count-succeeds-if-requests-start-with-given-number-of-requests
+(deftest requests-count?-succeeds-when-requests-have-been-made
   (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
-      (assert-requests-count requests 0 {:timeout 10}))))
+      (is (not (requests-count? requests 1)))
+      (http/get "http://localhost:4334/endpoint")
+      (is (requests-count? requests 1)))))
+
+(deftest requests-count?-succeeds-if-requests-start-with-given-number-of-requests
+  (let [[requests endpoint] (recording-endpoint)]
+    (with-standalone-server [ss (standalone-server endpoint)]
+      (is (requests-count? requests 0 {:timeout 10})))))
 
 (deftest recording-concurrent-requests-accurately
   (let [[requests endpoint] (recording-endpoint)]
@@ -69,7 +76,7 @@
         (thread-run
          #(http/post "http://localhost:4334/endpoint"
                      {:body (ByteArrayInputStream. (.getBytes (str "hello there #" n)))})))
-      (assert-requests-count requests 5 {:timeout 2000})
+      (is (requests-count? requests 5 {:timeout 2000}))
       (is (= #{"hello there #0"
                "hello there #1"
                "hello there #2"
