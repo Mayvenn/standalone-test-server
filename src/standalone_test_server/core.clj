@@ -96,18 +96,19 @@
   ;; Returns a 404 response to the http client that hits this endpoint
   (recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
   [& [{:keys [handler]
-       :or {handler default-handler}}]]
+       :or   {handler default-handler}}]]
   (let [requests-atom (atom [])]
     [requests-atom
      (fn [request]
-       (let [request (assoc request
-                            :body (-> request :body slurp)
-                            :query-params (into {}
-                                                (some->> request
-                                                         :query-string
-                                                         form-decode)))]
+       (let [request  (assoc request
+                             :body (-> request :body slurp)
+                             :query-params (into {}
+                                                 (some->> request
+                                                          :query-string
+                                                          form-decode)))
+             response (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))]
          (swap! requests-atom conj request)
-         (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))))]))
+         response))]))
 
 (defn standalone-server
   "Wrapper to start a standalone server through ring-jetty. Takes a ring handler

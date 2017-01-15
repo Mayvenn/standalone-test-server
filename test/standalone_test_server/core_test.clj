@@ -69,6 +69,17 @@
     (with-standalone-server [ss (standalone-server endpoint)]
       (is (requests-count? requests 0 {:timeout 10})))))
 
+(deftest requests-count?-does-not-succeed-until-slow-handler-has-finished
+  (let [processed? (promise)
+        [requests endpoint] (recording-endpoint {:handler (fn [req]
+                                                            (Thread/sleep 50)
+                                                            (deliver processed? true)
+                                                            {:status 200 :body ""})})]
+    (with-standalone-server [ss (standalone-server endpoint)]
+      (thread-run #(http/get "http://localhost:4334/endpoint"))
+      (is (requests-count? requests 1 {:timeout 100}))
+      (is (realized? processed?)))))
+
 (deftest recording-concurrent-requests-accurately
   (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
