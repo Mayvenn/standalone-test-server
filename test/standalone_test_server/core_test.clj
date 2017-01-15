@@ -77,7 +77,7 @@
                                                              {:status 200 :body ""})})]
     (with-standalone-server [ss (standalone-server handler)]
       (thread-run #(http/get "http://localhost:4334/endpoint"))
-      (is (responses-count? responses 1 {:timeout 100}))
+      (is (responses-count? responses 1))
       (is (realized? processed?)))))
 
 (deftest recording-concurrent-requests-accurately
