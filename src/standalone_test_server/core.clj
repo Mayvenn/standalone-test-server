@@ -12,65 +12,66 @@
 
 (def ^:private default-timeout 500)
 
-(defn atom-meet?
-  "Blocks until the given atom satisfies a predicate or the timeout has been reached.
+(defn traffic-meets?
+  "Blocks until the given traffic-atom satisfies a predicate or the timeout has
+  been reached.
 
   Returns true or false respectively.
 
-  The predicate function takes the state of the atom as the only argument. It is
-  tested after every change to the atom.
+  The predicate function takes the state of the traffic-atom as the only argument. It is
+  tested after every change to the traffic.
 
   Also note that the predicate function may be called on multiple threads simultaneously.
 
-  ;; Reports whether an-atom has at least 2 items before 3 seconds have elapsed.
-  (atom-meet? an-atom #(<= 2 (count %)) {:timeout 3000})
+  ;; Reports whether traffic-atom has at least 2 items before 3 seconds have elapsed.
+  (traffic-meets? traffic-atom #(<= 2 (count %)) {:timeout 3000})
   "
-  ([a pred] (atom-meet? a pred {}))
-  ([a pred {:keys [timeout]
+  ([traffic pred] (traffic-meets? traffic pred {}))
+  ([traffic pred {:keys [timeout]
                         :or {timeout default-timeout}}]
    (let [prom (promise)
          id   (gensym)]
-     (add-watch a id (fn [_ _ _ new-state]
+     (add-watch traffic id (fn [_ _ _ new-state]
                                    (when (pred new-state)
                                      (deliver prom true))))
-     (let [met? (or (pred @a)
+     (let [met? (or (pred @traffic)
                     (deref prom timeout false))]
-       (remove-watch a id)
+       (remove-watch traffic id)
        met?))))
 
-(defn atom-count?
-  "Convenience for calling (atom-meet? an-atom #(= exact-count (count %)) options)"
-  ([a exact-count]
-   (atom-count? a exact-count {}))
-  ([a exact-count options]
-   (atom-meet? a #(= exact-count (count %)) options)))
+(defn traffic-count?
+  "Convenience for calling (traffic-meets? traffic-atom #(= exact-count (count %)) options)"
+  ([traffic exact-count]
+   (traffic-count? traffic exact-count {}))
+  ([traffic exact-count options]
+   (traffic-meets? traffic #(= exact-count (count %)) options)))
 
-(defn atom-min-count?
-  "Convenience for calling (atom-meet? an-atom #(<= min-count (count %)) options)"
-  ([a min-count]
-   (atom-min-count? a min-count {}))
-  ([a min-count options]
-   (atom-meet? a #(<= min-count (count %)) options)))
+(defn traffic-min-count?
+  "Convenience for calling (traffic-meets? traffic-atom #(<= min-count (count %)) options)"
+  ([traffic min-count]
+   (traffic-min-count? traffic min-count {}))
+  ([traffic min-count options]
+   (traffic-meets? traffic #(<= min-count (count %)) options)))
 
-(defn atom-quiescent
-  "Blocks until the given atom atom has stopped growing for `for-ms`
+(defn traffic-quiescent
+  "Blocks until the given traffic traffic has stopped growing for `for-ms`
 
   Returns nil.
   "
-  ([a] (atom-quiescent a {}))
-  ([a {:keys [for-ms] :or {for-ms default-timeout}}]
-   (loop [len (count @a)]
-     (when-let [grown? (atom-meet? a #(< len (count %)) {:timeout for-ms})]
-       (recur (count @a))))))
+  ([traffic] (traffic-quiescent traffic {}))
+  ([traffic {:keys [for-ms] :or {for-ms default-timeout}}]
+   (loop [len (count @traffic)]
+     (when-let [grown? (traffic-meets? traffic #(< len (count %)) {:timeout for-ms})]
+       (recur (count @traffic))))))
 
-(def requests-meet? "Synonym for atom-meet?, but makes tests read better" atom-meet?)
-(def requests-count? "Synonym for atom-count?, but makes tests read better" atom-count?)
-(def requests-min-count? "Synonym for atom-min-count?, but makes tests read better" atom-min-count?)
-(def requests-quiescent "Synonym for atom-quiescent, but makes tests read better" atom-quiescent)
-(def responses-meet? "Synonym for atom-meet?, but makes tests read better" atom-meet?)
-(def responses-count? "Synonym for atom-count?, but makes tests read better" atom-count?)
-(def responses-min-count? "Synonym for atom-min-count?, but makes tests read better" atom-min-count?)
-(def responses-quiescent "Synonym for atom-quiescent, but makes tests read better" atom-quiescent)
+(def requests-meet? "Synonym for traffic-meets?, but makes tests more legible" traffic-meets?)
+(def requests-count? "Synonym for traffic-count?, but makes tests more legible" traffic-count?)
+(def requests-min-count? "Synonym for traffic-min-count?, but makes tests more legible" traffic-min-count?)
+(def requests-quiescent "Synonym for traffic-quiescent, but makes tests more legible" traffic-quiescent)
+(def responses-meet? "Synonym for traffic-meets?, but makes tests more legible" traffic-meets?)
+(def responses-count? "Synonym for traffic-count?, but makes tests more legible" traffic-count?)
+(def responses-min-count? "Synonym for traffic-min-count?, but makes tests more legible" traffic-min-count?)
+(def responses-quiescent "Synonym for traffic-quiescent, but makes tests more legible" traffic-quiescent)
 
 (defn recording-traffic
   "Creates a ring handler that can record the traffic that flows through it.
