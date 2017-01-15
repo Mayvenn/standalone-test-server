@@ -22,7 +22,7 @@ Then you can require it using:
 ```clj
 (ns ...
     (:require [standalone-test-server :refer [standalone-server
-                                              recording-endpoint
+                                              recording-requests
                                               with-standalone-server]]))
 ```
 
@@ -60,10 +60,10 @@ It assumes the first binding is the server:
   )
 ```
 
-### recording-endpoint
+### recording-requests
 
 `standalone-server` expects a handler. When you want to record the requests that
-pass through that handler, use `recording-endpoint`.
+pass through that handler, use `recording-requests`.
 
 This function wraps (or creates - see below) a ring middleware handler. It
 returns a tuple: the first item is an atom containing the sequence of requests
@@ -71,7 +71,7 @@ the handler has received; the second item is a modified handler to pass to the
 `standalone-server`.
 
 ```clj
-(let [[requests handler] (recording-endpoint)]
+(let [[requests handler] (recording-requests)]
   (with-standalone-server [s (standalone-server handler)]
     (http/get "http://localhost:4334/endpoint")
     (is (= 1 (count @requests)))))
@@ -82,7 +82,7 @@ provided, it uses a default that returns a 200 empty body response.
 
 ```clj
 (let [[requests handler]
-      (recording-endpoint {:handler (constantly {:status 201, :body "hi"})})]
+      (recording-requests {:handler (constantly {:status 201, :body "hi"})})]
   (with-standalone-server [s (standalone-server handler)]
     (let [response (http/get "http://localhost:4334/endpoint")]
       (is (= 1 (count @requests)))
@@ -107,7 +107,7 @@ There is one optional argument:
 - `:timeout` the period of time (in milliseconds) to wait until returning false; defaults to 500.
 
 ```clj
-(let [[requests handler] (recording-endpoint)]
+(let [[requests handler] (recording-requests)]
   (with-standalone-server [s (standalone-server handler)]
     ;; Trigger async code which will make request...
     (is (requests-meet? requests #(= 1 (count %)) {:timeout 1000}))
@@ -127,7 +127,7 @@ There is one optional argument:
 - `:for-ms` How long to wait after receiving the last request before declaring quiescence.
 
 ```clj
-(let [[requests handler] (recording-endpoint)]
+(let [[requests handler] (recording-requests)]
   (with-standalone-server [s (standalone-server handler)]
     ;; Trigger async code which will make unknown number of requests...
     (requests-quiescent requests {:timeout 1000})))

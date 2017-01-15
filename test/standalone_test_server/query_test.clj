@@ -115,8 +115,8 @@
                             "test" "value"}))))))
 
 (deftest future-integration
-  (let [[requests endpoint] (recording-endpoint)]
-    (with-standalone-server [ss (standalone-server endpoint)]
+  (let [[requests handler] (recording-requests)]
+    (with-standalone-server [ss (standalone-server handler)]
       (http/post "http://localhost:4334/endpoint?a=b"
                  {:headers {:content-type "application/json"}
                   :body (ByteArrayInputStream. (.getBytes "{\"test\":\"value\"}"))})

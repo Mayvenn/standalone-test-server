@@ -12,7 +12,7 @@
 
 (def ^:private default-timeout 500)
 
-(defn requests-meet?
+(defn atom-meet?
   "Blocks until the given atom satisfies a predicate or the timeout has been reached.
 
   Returns true or false respectively.
@@ -22,93 +22,143 @@
 
   Also note that the predicate function may be called on multiple threads simultaneously.
 
-  ;; Reports whether req-atom has at least 2 requests before 3 seconds have elapsed.
-  (requests-meet? req-atom #(>= 2 (count %)) {:timeout 3000})
+  ;; Reports whether an-atom has at least 2 items before 3 seconds have elapsed.
+  (atom-meet? an-atom #(<= 2 (count %)) {:timeout 3000})
   "
-  ([requests-atom pred] (requests-meet? requests-atom pred {}))
-  ([requests-atom pred {:keys [timeout]
+  ([a pred] (atom-meet? a pred {}))
+  ([a pred {:keys [timeout]
                         :or {timeout default-timeout}}]
    (let [prom (promise)
          id   (gensym)]
-     (add-watch requests-atom id (fn [_ _ _ new-state]
+     (add-watch a id (fn [_ _ _ new-state]
                                    (when (pred new-state)
                                      (deliver prom true))))
-     (let [met? (or (pred @requests-atom)
+     (let [met? (or (pred @a)
                     (deref prom timeout false))]
-       (remove-watch requests-atom id)
+       (remove-watch a id)
        met?))))
 
-(defn requests-count?
-  "Convenience for calling (requests-meet? req-atom #(= exact-count (count %)) options)"
-  ([requests-atom exact-count]
-   (requests-count? requests-atom exact-count {}))
-  ([requests-atom exact-count options]
-   (requests-meet? requests-atom #(= exact-count (count %)) options)))
+(defn atom-count?
+  "Convenience for calling (atom-meet? an-atom #(= exact-count (count %)) options)"
+  ([a exact-count]
+   (atom-count? a exact-count {}))
+  ([a exact-count options]
+   (atom-meet? a #(= exact-count (count %)) options)))
 
-(defn requests-min-count?
-  "Convenience for calling (requests-meet? req-atom #(<= min-count (count %)) options)"
-  ([requests-atom min-count]
-   (requests-min-count? requests-atom min-count {}))
-  ([requests-atom min-count options]
-   (requests-meet? requests-atom #(<= min-count (count %)) options)))
+(defn atom-min-count?
+  "Convenience for calling (atom-meet? an-atom #(<= min-count (count %)) options)"
+  ([a min-count]
+   (atom-min-count? a min-count {}))
+  ([a min-count options]
+   (atom-meet? a #(<= min-count (count %)) options)))
 
-(defn requests-quiescent
-  "Blocks until the given requests atom has stopped growing for `for-ms`
+(defn atom-quiescent
+  "Blocks until the given atom atom has stopped growing for `for-ms`
 
   Returns nil.
   "
-  ([requests-atom] (requests-quiescent requests-atom {}))
-  ([requests-atom {:keys [for-ms] :or {for-ms default-timeout}}]
-   (loop [len (count @requests-atom)]
-     (when-let [grown? (requests-meet? requests-atom #(< len (count %)) {:timeout for-ms})]
-       (recur (count @requests-atom))))))
+  ([a] (atom-quiescent a {}))
+  ([a {:keys [for-ms] :or {for-ms default-timeout}}]
+   (loop [len (count @a)]
+     (when-let [grown? (atom-meet? a #(< len (count %)) {:timeout for-ms})]
+       (recur (count @a))))))
 
-(defn recording-endpoint
-  "Creates a ring handler that can record the requests it receives.
+(def requests-meet? "Synonym for atom-meet?, but makes tests read better" atom-meet?)
+(def requests-count? "Synonym for atom-count?, but makes tests read better" atom-count?)
+(def requests-min-count? "Synonym for atom-min-count?, but makes tests read better" atom-min-count?)
+(def requests-quiescent "Synonym for atom-quiescent, but makes tests read better" atom-quiescent)
+(def responses-meet? "Synonym for atom-meet?, but makes tests read better" atom-meet?)
+(def responses-count? "Synonym for atom-count?, but makes tests read better" atom-count?)
+(def responses-min-count? "Synonym for atom-min-count?, but makes tests read better" atom-min-count?)
+(def responses-quiescent "Synonym for atom-quiescent, but makes tests read better" atom-quiescent)
+
+(defn recording-traffic
+  "Creates a ring handler that can record the traffic that flows through it.
 
   Options:
-  handler           The handler for the recording-endpoint to wrap. Defaults to
-                    a handler that returns status 200 with an empty body.
+  handler  The handler for recording-traffic to wrap. Defaults to
+           a handler that returns status 200 with an empty body.
 
   Returns:
-  [requests-atom recording-handler]
+  [{:requests  requests-atom
+    :responses responses-atom}
+   recording-handler]
 
-
-  Returns an atom that contains a vector of requests received by the recording-handler.
-
-  If you need to ensure a condition of the requests-atom is satisfied before
-  deref-ing it, use `requests-meet?`, `requests-count?` or a related helper.
+  The requests-atom contains a vector of requests received by the
+  recording-handler. Each item in the responses-atom will be a map of the
+  `request` and its corresponding `response`. If the handler is slow, items will
+  show up in the requests-atom before showing up in the responses-atom.
 
   The requests are standard ring requests except that the :body will be a string
   instead of InputStream.
 
   Example invocations:
-  ;; Waits for a single request for 1000ms
-  (let [[req-atom endpoint] (recording-endpoint)]
-    (is (requests-meet? req-atom first {:timeout 1000}))
-    (first @req-atom))
+  ;; Returns a 404 response to the http client that hits this handler
+  (recording-traffic {:handler (constantly {:status 404 :headers {}})})
 
-  ;; Waits up to 1000ms for two requests
-  (let [[req-atom endpoint] (recording-endpoint {:timeout 1000})]
-    (is (requests-meet? req-atom second {:timeout 1000}))
-    (take 2 @req-atom))
-
-  ;; Returns a 404 response to the http client that hits this endpoint
-  (recording-endpoint {:handler (constantly {:status 404 :headers {}})})"
+  See `with-standalone-server` for an example of how to use `recording-traffic`
+  with a `standalone-server`."
   [& [{:keys [handler]
        :or   {handler default-handler}}]]
-  (let [requests-atom (atom [])]
-    [requests-atom
+  (let [requests-atom  (atom [])
+        responses-atom (atom [])]
+    [{:requests requests-atom
+      :responses responses-atom}
      (fn [request]
-       (let [request  (assoc request
-                             :body (-> request :body slurp)
-                             :query-params (into {}
-                                                 (some->> request
-                                                          :query-string
-                                                          form-decode)))
-             response (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))]
+       (let [request (assoc request
+                            :body (-> request :body slurp)
+                            :query-params (into {}
+                                                (some->> request
+                                                         :query-string
+                                                         form-decode)))]
          (swap! requests-atom conj request)
-         response))]))
+         (let [response (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))]
+           (swap! responses-atom conj {:request request :response response})
+           response)))]))
+
+(defn recording-requests
+  "Like `recording-traffic` but the first item in the returned tuple is only the
+  `requests`.
+
+  If you need to ensure a condition of the requests-atom is satisfied before
+  deref-ing it, use `requests-meet?`, `requests-count?` or a related helper.
+
+  Example invocations:
+  ;; Waits up to 1000ms for a single request
+  (let [[requests handler] (recording-requests)]
+    (is (requests-meet? requests first {:timeout 1000}))
+    (first @requests))
+
+  ;; Waits up to 1000ms for two requests
+  (let [[requests handler] (recording-requests)]
+    (is (requests-meet? requests second {:timeout 1000}))
+    (take 2 @requests))"
+  [& args]
+  (let [[{:keys [requests]} handler] (apply recording-traffic args)]
+    [requests handler]))
+
+(def recording-endpoint "Deprecated synonym for `recording-requests`" recording-requests)
+
+(defn recording-responses
+  "Like `recording-traffic` but the first item in the returned tuple is only the
+  `responses`.
+
+  If you need to ensure a condition of the responses-atom is satisfied before
+  deref-ing it, use `responses-meet?`, `responses-count?` or a related helper.
+
+  Example invocations:
+  ;; Waits up to 1000ms for a single response
+  (let [[responses handler] (recording-responses)]
+    (is (responses-meet? responses first {:timeout 1000}))
+    (first @responses))
+
+  ;; Waits up to 1000ms for two responses
+  (let [[responses handler] (recording-responses)]
+    (is (responses-meet? responses second {:timeout 1000}))
+    (take 2 @responses))"
+  [& args]
+  (let [[{:keys [responses]} handler] (apply recording-traffic args)]
+    [responses handler]))
 
 (defn standalone-server
   "Wrapper to start a standalone server through ring-jetty. Takes a ring handler
@@ -122,9 +172,9 @@
 (defmacro with-standalone-server
   "A convenience macro to ensure a standalone-server is stopped.
 
-  Example with standalone-server and recording-endpoint:
-  (let [[requests endpoint] (recording-endpoint)]
-    (with-standalone-server [server (standalone-server endpoint)]
+  Example with standalone-server and recording-requests:
+  (let [[requests handler] (recording-requests)]
+    (with-standalone-server [server (standalone-server handler)]
       (http/get \"http://localhost:4334/endpoint\")
       (is (requests-count? requests 1))))"
   [bindings & body]
