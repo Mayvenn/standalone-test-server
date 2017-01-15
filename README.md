@@ -2,12 +2,12 @@
 
 [![Circle CI](https://circleci.com/gh/Mayvenn/standalone-test-server.svg?style=svg&circle-token=599f432978d381e2614f42ed892267b45dde78d9)](https://circleci.com/gh/Mayvenn/standalone-test-server) [Documentation](http://mayvenn.github.io/standalone-test-server/standalone-test-server.core.html)
 
-A simple HTTP ring handler to test HTTP requests.
+A simple clojure HTTP ring handler to test HTTP requests.
 
 Instead of mocking or stubbing HTTP requests, this library can spawn a basic web server
-that run any ring handler while recording all incoming requests.
+that runs any ring handler while recording all incoming requests.
 
-We use it at Mayvenn to write tests with a simulated http api. We've written a short [blog post](http://engineering.mayvenn.com/2015/06/26/Testing-External-HTTP-Requests/) to help explain some of the motivation/reasoning behind this small library.
+We use it at Mayvenn to simulate external apis in our tests. We've written a short [blog post](http://engineering.mayvenn.com/2015/06/26/Testing-External-HTTP-Requests/) to help explain some of the motivation/reasoning behind this small library.
 
 ## Installation
 
@@ -30,78 +30,128 @@ Then you can require it using:
 
 There are only two functions and one macro. But they are usually used together to form a test case.
 
-
 ### standalone-server
 
 A wrapper around [ring.adapter.jetty](https://github.com/ring-clojure/ring/tree/master/ring-jetty-adapter)'s
-run-jetty function. Simply passes through with a default port of `4334` and `:join? false`.
+run-jetty function. 
+
+Like `run-jetty`, it expects a ring handler and some (optional) config. The config
+defaults to `:port 4334` and `:join? false`.
 
 ```clj
-(let [server (standalone-server)]
+(let [server (standalone-server (constantly {:status 201, :body "hi"}))]
   (try
-    ;; perform requests
+    (http/get "http://localhost:4334/endpoint") ;; NOTE: request port must match the standalone-server's port
     (finally
       (.stop server))))
 ```
 
-Since it's common to do this pattern, you can use the `with-standalone-server` macro to avoid having to
-try-finally your own code.
+You can avoid the let-try-finally boilerplate with the `with-standalone-server`
+macro.
 
 ### with-standalone-server (macro)
 
-This macro removes the boilerplate of let-try-finally. It assumes the first binding is the server:
+It assumes the first binding is the server:
 
 ```clj
-(with-standalone-server [server (standalone-server)]
+(with-standalone-server [server (standalone-server (constantly {:status 201, :body "hi"}))]
   ;; perform requests
+  ;; macro ensures `(.stop server)`
   )
 ```
 
-
 ### recording-endpoint
 
-This function is a ring middleware that records all requests that pass through it.
-Unlike regular middleware, this function will return a vector of the handler and
-a lazy sequence of requests.
+`standalone-server` expects a handler. When you want to record the requests that
+pass through that handler, use `recording-endpoint`.
+
+This function wraps (or creates - see below) a ring middleware handler. It
+returns a tuple: the first item is an atom containing the sequence of requests
+the handler has received; the second item is a modified handler to pass to the
+`standalone-server`.
 
 ```clj
 (let [[requests handler] (recording-endpoint)]
   (with-standalone-server [s (standalone-server handler)]
     (http/get "http://localhost:4334/endpoint")
-    (is (= 1 (count requests)))))
+    (is (= 1 (count @requests)))))
 ```
 
-Upon iteration, the requests sequence will dereference underlying request futures timing out and
-terminating the sequence if unable to dereference a request, most likely caused by the next request never being made.
-
-There are two optional arguments:
-
-- `:timeout` the period of time (in milliseconds) to wait while dereferencing the next request before timing out and terminating the lazy-seq of requests
-- `:handler` the underlying ring handler to call. If none is provided, it uses a default that returns a 200 empty body response.
-
-You can override them by passing a map:
+You can provide a `:handler` as the underlying ring handler to call. If none is
+provided, it uses a default that returns a 200 empty body response.
 
 ```clj
-(let [[retrieve-requests handler]
-      (recording-endpoint {:timeout 5000
-                           :handler (constantly {:status 201, :body "hi"})})]
+(let [[requests handler]
+      (recording-endpoint {:handler (constantly {:status 201, :body "hi"})})]
   (with-standalone-server [s (standalone-server handler)]
-    (is (= (:body (http/get "http://localhost:4334/endpoint"))
-           "hi"))
-    (is (= 1 (count retrieve-requests)))))
+    (let [response (http/get "http://localhost:4334/endpoint")]
+      (is (= 1 (count @requests)))
+      (is (= (:body response) "hi")))))
 ```
 
-### Query Namespace
+This final form is what most tests will look like, so make sure you understand it.
 
-This namespace contains a list of helper filters.
+## Waiting for asynchronous requests
 
-| Name                  | Params      | Includes                                                      | 
-| --------------------- | ----------- | ------------------------------------------------------------- |
-| with-uri              | uri col     | Matches uri the request's uri                                 |
-| with-method           | method col  | Matches method the request's method                           |
-| with-query-keys       | key-set col | Matches key-set to the parsed query-string's keys             |
-| with-query-key-subset | key-set col | Where key-set is a subset of the parsed query-string's keys   |
-| with-query-params     | kv-map col  | Matches kv-map to the parsed query-string                     |
-| with-body-keys        | key-set col | Matches key-set to the parsed body's keys                     |
-| with-body-key-subset  | key-set col | Where key-set is a subset of the parsed body keys             |
-| with-body             | kv-map      | Matches kv-map to the parsed body                             |
+Many systems will make requests to the standalone server asynchronously. Tests
+usually want to block until the requests have been made before making further
+assertions. There are several helpers for waiting until the requests meet a
+condition before continuing. They are all based on the `requests-meet?` helper.
+
+This helper takes a requests atom and a predicate. If the requests satisfy the
+predicate before the timeout this helper returns true. Otherwise, it returns
+false.
+
+There is one optional argument:
+
+- `:timeout` the period of time (in milliseconds) to wait until returning false; defaults to 500.
+
+```clj
+(let [[requests handler] (recording-endpoint)]
+  (with-standalone-server [s (standalone-server handler)]
+    ;; Trigger async code which will make request...
+    (is (requests-meet? requests #(= 1 (count %)) {:timeout 1000}))
+    ;; Assertions about how system has changed after receiving response...
+    ))
+```
+
+A shorter way to do the above is `(is (requests-count? requests 1))`. You can
+also check `(is (requests-min-count? requests 1))` if you want to wait for *at
+least* one request.
+
+If you don't know how many requests will be made and just want to wait until the server
+has stopped receiving them, use `requests-quiescent`:
+
+There is one optional argument:
+
+- `:for-ms` How long to wait after receiving the last request before declaring quiescence.
+
+```clj
+(let [[requests handler] (recording-endpoint)]
+  (with-standalone-server [s (standalone-server handler)]
+    ;; Trigger async code which will make unknown number of requests...
+    (requests-quiescent requests {:timeout 1000})))
+```
+
+Note that `requests-quiescent` will always take at least `for-ms` to return.
+This is because it starts a timer when it is called, resets the timer after
+every new request, and waits for the timer to expire before declaring
+quiescence.
+
+Because of this, your tests will be much faster if you can use
+`requests-count?`.
+
+## Filtering requests
+
+The `query` namespace contains helpers for filtering collections of requests.
+
+| Name                  | Params       | Includes                                                      | 
+| --------------------- | ------------ | ------------------------------------------------------------- |
+| with-uri              | uri coll     | Filters coll to requests with the given uri                   |
+| with-method           | method coll  | With the given request method                                 |
+| with-query-keys       | key-set coll | Matches key-set to the parsed query-string's keys             |
+| with-query-key-subset | key-set coll | Where key-set is a subset of the parsed query-string's keys   |
+| with-query-params     | kv-map coll  | Matches kv-map to the parsed query-string                     |
+| with-body-keys        | key-set coll | Matches key-set to the parsed body's keys                     |
+| with-body-key-subset  | key-set coll | Where key-set is a subset of the parsed body keys             |
+| with-body             | kv-map coll  | Matches kv-map to the parsed body                             |
