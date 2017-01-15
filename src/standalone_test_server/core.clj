@@ -33,7 +33,8 @@
      (add-watch requests-atom id (fn [_ _ _ new-state]
                                    (when (pred new-state)
                                      (deliver prom true))))
-     (let [met? (deref prom timeout false)]
+     (let [met? (or (pred @requests-atom)
+                    (deref prom timeout false))]
        (remove-watch requests-atom id)
        met?))))
 

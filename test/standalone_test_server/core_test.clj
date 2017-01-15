@@ -39,6 +39,11 @@
     (with-standalone-server [ss (standalone-server endpoint)]
       (is (thrown? AssertionError (assert-requests requests #(<= 5 (count %)) {:timeout 10}))))))
 
+(deftest assert-requests-count-succeeds-if-requests-start-with-given-number-of-requests
+  (let [[requests endpoint] (recording-endpoint)]
+    (with-standalone-server [ss (standalone-server endpoint)]
+      (assert-requests-count requests 0 {:timeout 10}))))
+
 (deftest recording-concurrent-requests-accurately
   (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
