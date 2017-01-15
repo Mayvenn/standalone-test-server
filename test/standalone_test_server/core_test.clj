@@ -42,8 +42,8 @@
 (deftest waiting-until-requests-quiescent
   (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint {:port 4336})]
-      ;; requests delivered after: 1ms     10ms      100ms
-      ;; quiescent times:              9ms      99ms
+      ;; requests delivered after: 1ms     10ms      100ms       1000ms
+      ;; quiescent times:              9ms      99ms       999ms
       (dotimes [n 3]
         (thread-run
          #(do
@@ -54,8 +54,8 @@
               (catch ConnectException e
                 ;; Test finishes and server closes before last request
                 nil)))))
-      (requests-quiescent requests {:for-ms 50})
-      (is (= 2 (count @requests))))))
+      (requests-quiescent requests {:for-ms 200})
+      (is (= 3 (count @requests))))))
 
 (deftest requests-count?-succeeds-when-requests-have-been-made
   (let [[requests endpoint] (recording-endpoint)]
