@@ -1,4 +1,4 @@
-(defproject standalone-test-server "0.6.0"
+(defproject standalone-test-server "0.6.1-SNAPSHOT"
   :description "An in-process server that can record requests.
                Useful for testing code that makes external http requests"
   :url "https://github.com/Mayvenn/standalone-test-server"
