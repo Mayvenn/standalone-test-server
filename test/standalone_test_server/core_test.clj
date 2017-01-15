@@ -42,8 +42,6 @@
 (deftest waiting-until-requests-quiescent
   (let [[requests handler] (recording-requests)]
     (with-standalone-server [ss (standalone-server handler {:port 4336})]
-      ;; requests delivered after: 1ms     10ms      100ms       1000ms
-      ;; quiescent times:              9ms      99ms       999ms
       (dotimes [n 4]
         (thread-run
          #(do
@@ -52,10 +50,10 @@
               (http/post "http://localhost:4336/endpoint"
                          {:body (ByteArrayInputStream. (.getBytes (str "hello there #" n)))})
               (catch ConnectException e
-                ;; Test finishes and server closes before last request
+                ;; Test may finish and close server before last request
                 nil)))))
-      (requests-quiescent requests {:for-ms 200})
-      (is (= 3 (count @requests))))))
+      (requests-quiescent requests {:for-ms 1000})
+      (is (requests-min-count? requests 3)))))
 
 (deftest requests-count?-succeeds-when-requests-have-been-made
   (let [[requests handler] (recording-requests)]
