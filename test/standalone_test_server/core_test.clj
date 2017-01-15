@@ -39,6 +39,24 @@
     (with-standalone-server [ss (standalone-server endpoint)]
       (is (thrown? AssertionError (assert-requests requests #(<= 5 (count %)) {:timeout 10}))))))
 
+(deftest waiting-until-requests-quiescent
+  (let [[requests endpoint] (recording-endpoint)]
+    (with-standalone-server [ss (standalone-server endpoint {:port 4336})]
+      ;; requests delivered after: 1ms     10ms      100ms
+      ;; quiescent times:              9ms      99ms
+      (dotimes [n 3]
+        (thread-run
+         #(do
+            (Thread/sleep (Math/pow 10 n))
+            (try
+              (http/post "http://localhost:4336/endpoint"
+                         {:body (ByteArrayInputStream. (.getBytes (str "hello there #" n)))})
+              (catch ConnectException e
+                ;; Test finishes and server closes before last request
+                nil)))))
+      (requests-quiescent requests {:for-ms 50})
+      (is (= 2 (count @requests))))))
+
 (deftest assert-requests-count-succeeds-if-requests-start-with-given-number-of-requests
   (let [[requests endpoint] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server endpoint)]
@@ -58,24 +76,6 @@
                "hello there #3"
                "hello there #4"}
              (set (map :body @requests)))))))
-
-(deftest recording-until-requests-are-quiescent
-  (let [[requests endpoint] (recording-endpoint)]
-    (with-standalone-server [ss (standalone-server endpoint {:port 4336})]
-      ;; requests delivered after: 1ms     10ms      100ms
-      ;; quiescent times:              9ms      99ms
-      (dotimes [n 3]
-        (thread-run
-         #(do
-            (Thread/sleep (Math/pow 10 n))
-            (try
-              (http/post "http://localhost:4336/endpoint"
-                         {:body (ByteArrayInputStream. (.getBytes (str "hello there #" n)))})
-              (catch ConnectException e
-                ;; Test finishes and server closes before last request
-                nil)))))
-      (requests-quiescent requests {:for-ms 50})
-      (is (= 2 (count @requests))))))
 
 (deftest recording-without-a-request-returns-an-empty-vec
   (let [[requests endpoint] (recording-endpoint)]
