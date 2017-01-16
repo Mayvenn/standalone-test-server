@@ -3,8 +3,7 @@
             [standalone-test-server.core :refer :all]
             [standalone-test-server.query :refer :all]
             [clj-http.client :as http])
-  (:import [java.io ByteArrayInputStream]
-           [java.net ConnectException]))
+  (:import [java.net ConnectException]))
 
 (defn ^:private thread-run [f]
   (doto (Thread. f)
@@ -14,7 +13,7 @@
   (let [[requests handler] (recording-requests)]
     (with-standalone-server [ss (standalone-server handler)]
       (http/post "http://localhost:4334/endpoint?a=b"
-                 {:body (ByteArrayInputStream. (.getBytes "{\"test\":\"value\"}"))})
+                 {:body "{\"test\":\"value\"}"})
       (is (= "{\"test\":\"value\"}" (->> @requests first :body))))))
 
 (deftest recording-requests-without-body
@@ -27,7 +26,7 @@
   (let [[requests handler] (recording-requests)]
     (with-standalone-server [ss (standalone-server handler)]
       (dotimes [n 5] (http/post "http://localhost:4334/endpoint"
-                                {:body (ByteArrayInputStream. (.getBytes (str "hello there #" n)))}))
+                                {:body (str "hello there #" n)}))
       (is (= '("hello there #0"
                "hello there #1"
                "hello there #2"
@@ -50,8 +49,7 @@
          #(do
             (Thread/sleep (Math/pow 10 n))
             (try
-              (http/post "http://localhost:4336/endpoint"
-                         {:body (ByteArrayInputStream. (.getBytes (str "hello there #" n)))})
+              (http/get "http://localhost:4336/endpoint")
               (catch ConnectException e
                 ;; Test may finish and close server before last request
                 nil)))))
@@ -87,7 +85,7 @@
       (dotimes [n 5]
         (thread-run
          #(http/post "http://localhost:4334/endpoint"
-                     {:body (ByteArrayInputStream. (.getBytes (str "hello there #" n)))})))
+                     {:body (str "hello there #" n)})))
       (is (requests-count? requests 5 {:timeout 2000}))
       (is (= #{"hello there #0"
                "hello there #1"
@@ -127,7 +125,7 @@
         [_ handler] (recording-requests {:handler inner-handler})]
     (with-standalone-server [ss (standalone-server handler)]
       (http/post "http://localhost:4334/endpoint"
-                 {:body (ByteArrayInputStream. (.getBytes "hello there"))})
+                 {:body "hello there"})
       (is (= "hello there" (slurp @inner-handler-body))))))
 
 (deftest specifying-a-response-handler
@@ -147,8 +145,7 @@
 (deftest running-on-different-port
   (let [[requests handler] (recording-requests)]
     (with-standalone-server [ss (standalone-server handler {:port 4335})]
-      (http/post "http://localhost:4335/endpoint?hello=world&a=b&array[]=4" {:headers {:content-type "application/json"}
-                                                                             :body (ByteArrayInputStream. (.getBytes "{'hello':'wolrd'}"))})
+      (http/get "http://localhost:4335/endpoint")
       (is (= 1 (count @requests))))))
 
 (deftest specifying-multiple-servers-together
