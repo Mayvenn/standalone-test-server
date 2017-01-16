@@ -16,7 +16,7 @@ help explain some of the motivation/reasoning behind this small library.
 Add this line to your `:dependencies` key for your project.clj:
 
 ```clj
-[standalone-test-server "0.5.0"]
+[standalone-test-server "0.6.1"]
 ```
 
 Then you can require it using:
