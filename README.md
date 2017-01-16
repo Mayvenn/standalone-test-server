@@ -36,10 +36,9 @@ to form a test case.
 ### standalone-server
 
 A wrapper around [ring.adapter.jetty](https://github.com/ring-clojure/ring/tree/master/ring-jetty-adapter)'s
-run-jetty function.
+`run-jetty` function.
 
-Like `run-jetty`, it expects a ring handler and some (optional) config. The config
-defaults to `:port 4334` and `:join? false`.
+Like `run-jetty`, it expects a ring handler and some (optional) config.
 
 ```clj
 (let [server (standalone-server (constantly {:status 201, :body "hi"}))]
@@ -49,10 +48,10 @@ defaults to `:port 4334` and `:join? false`.
       (.stop server))))
 ```
 
-You can avoid the let-try-finally boilerplate with the `with-standalone-server`
-macro.
-
 ### with-standalone-server (macro)
+
+You can avoid the let-try-finally boilerplate of `standalone-server` with the
+`with-standalone-server` macro.
 
 It assumes the first binding is the server:
 
@@ -105,10 +104,6 @@ This helper takes a requests atom and a predicate. If the requests satisfy the
 predicate before the timeout this helper returns true. Otherwise, it returns
 false.
 
-There is one optional argument:
-
-- `:timeout` the period of time (in milliseconds) to wait until returning false; defaults to 500.
-
 ```clj
 (let [[requests handler] (recording-requests)]
   (with-standalone-server [s (standalone-server handler)]
@@ -134,10 +129,6 @@ whether your system has successfully processed the response.
 
 If you don't know how many requests will be made and just want to wait until the
 server has stopped receiving them, use `requests-quiescent`:
-
-There is one optional argument:
-
-- `:for-ms` How long to wait after receiving the last request before declaring quiescence.
 
 ```clj
 (let [[requests handler] (recording-requests)]

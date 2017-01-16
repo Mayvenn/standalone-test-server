@@ -4,14 +4,15 @@
   :url "https://github.com/Mayvenn/standalone-test-server"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :plugins [[codox "0.8.12"]]
+  :plugins [[lein-codox "0.10.2"]]
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [ring/ring-codec "1.0.0"]
                  [ring/ring-jetty-adapter "1.3.2"]
                  [org.clojure/data.json "0.2.6"]]
-  :codox {:include standalone-test-server.core
-          :src-dir-uri "http://github.com/Mayvenn/standalone-test-server/blob/master/"
-          :src-linenum-anchor-prefix "L"}
+  :codox {:source-paths ["src"]
+          :source-uri "http://github.com/Mayvenn/standalone-test-server/blob/master/{filepath}#L{line}"
+          :metadata {:doc/format :markdown}
+          :doc-files ["README.md"]}
   :deploy-repositories [["releases" :clojars]]
   :profiles
   {:dev {:source-paths ["dev"]
