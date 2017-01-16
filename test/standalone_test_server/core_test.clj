@@ -15,10 +15,13 @@
     (with-standalone-server [ss (standalone-server handler)]
       (http/post "http://localhost:4334/endpoint?a=b"
                  {:body (ByteArrayInputStream. (.getBytes "{\"test\":\"value\"}"))})
-      (is (= "{\"test\":\"value\"}" (->> @requests
-                                         (take 2)
-                                         (first)
-                                         :body))))))
+      (is (= "{\"test\":\"value\"}" (->> @requests first :body))))))
+
+(deftest recording-requests-without-body
+  (let [[requests handler] (recording-requests)]
+    (with-standalone-server [ss (standalone-server handler)]
+      (http/get "http://localhost:4334/endpoint")
+      (is (= "/endpoint" (-> @requests first :uri))))))
 
 (deftest recording-several-requests-with-body
   (let [[requests handler] (recording-requests)]
@@ -116,19 +119,6 @@
                (-> @requests
                    first
                    :query-params)))))))
-
-(deftest recording-requests-without-body
-  (let [[requests handler] (recording-requests)]
-    (with-standalone-server [ss (standalone-server handler)]
-      (http/get "http://localhost:4334/endpoint")
-      (is (= "/endpoint" (-> @requests first :uri))))))
-
-(deftest recording-requests-with-body
-  (let [[requests handler] (recording-requests)]
-    (with-standalone-server [ss (standalone-server handler)]
-      (http/post "http://localhost:4334/endpoint"
-                 {:body (ByteArrayInputStream. (.getBytes "hello there"))})
-      (is (= "hello there" (-> @requests first :body))))))
 
 (deftest recording-requests-preserves-input-stream-body-for-handler
   (let [inner-handler-body (promise)
