@@ -4,10 +4,12 @@
 
 A simple clojure HTTP ring handler to test HTTP requests.
 
-Instead of mocking or stubbing HTTP requests, this library can spawn a basic web server
-that runs any ring handler while recording all incoming requests.
+Instead of mocking or stubbing HTTP requests, this library can spawn a basic web
+server that runs any ring handler while recording all incoming requests.
 
-We use it at Mayvenn to simulate external apis in our tests. We've written a short [blog post](http://engineering.mayvenn.com/2015/06/26/Testing-External-HTTP-Requests/) to help explain some of the motivation/reasoning behind this small library.
+We use it at Mayvenn to simulate external apis in our tests. We've written a
+short [blog post](http://engineering.mayvenn.com/2015/06/26/Testing-External-HTTP-Requests/) to
+help explain some of the motivation/reasoning behind this small library.
 
 ## Installation
 
@@ -28,7 +30,8 @@ Then you can require it using:
 
 ## Usage
 
-There are only two functions and one macro. But they are usually used together to form a test case.
+There are only two functions and one macro. But they are usually used together
+to form a test case.
 
 ### standalone-server
 
@@ -91,15 +94,6 @@ provided, it uses a default that returns a 200 empty body response.
 
 Most tests will look like this, so make sure you understand this format.
 
-Sometimes you care less that your system has made some requests, and more that
-it has received some (possibly slow) responses. In this case, it is better to
-use `recording-responses`. The first item in the returned tuple is an atom whose
-items each contain a `request` and a `response`.
-
-Note that just because the response has been delivered by the handler doesn't
-mean your system has had time to process it. You may still need to poll for
-whether your system has successfully processed the response.
-
 ## Waiting for asynchronous requests
 
 Many systems will make requests to the standalone server asynchronously. Tests
@@ -128,8 +122,18 @@ A shorter way to do the above is `(is (requests-count? requests 1))`. You can
 also check `(is (requests-min-count? requests 1))` if you want to wait for *at
 least* one request.
 
-If you don't know how many requests will be made and just want to wait until the server
-has stopped receiving them, use `requests-quiescent`:
+Sometimes you care less that your system has made some requests, and more that
+it has received some (possibly slow) responses. In this case, it is better to
+use `recording-responses`. The first item in the returned tuple is an atom whose
+items each contain a `request` and a `response`. There are also helpers for
+`responses-meet?`, `responses-count?`, etc.
+
+Note that just because the response has been delivered by the handler doesn't
+mean your system has had time to process it. You may still need to poll for
+whether your system has successfully processed the response.
+
+If you don't know how many requests will be made and just want to wait until the
+server has stopped receiving them, use `requests-quiescent`:
 
 There is one optional argument:
 
