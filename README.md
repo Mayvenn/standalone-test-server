@@ -33,7 +33,7 @@ There are only two functions and one macro. But they are usually used together t
 ### standalone-server
 
 A wrapper around [ring.adapter.jetty](https://github.com/ring-clojure/ring/tree/master/ring-jetty-adapter)'s
-run-jetty function. 
+run-jetty function.
 
 Like `run-jetty`, it expects a ring handler and some (optional) config. The config
 defaults to `:port 4334` and `:join? false`.
@@ -89,7 +89,16 @@ provided, it uses a default that returns a 200 empty body response.
       (is (= (:body response) "hi")))))
 ```
 
-This final form is what most tests will look like, so make sure you understand it.
+Most tests will look like this, so make sure you understand this format.
+
+Sometimes you care less that your system has made some requests, and more that
+it has received some (possibly slow) responses. In this case, it is better to
+use `recording-responses`. The first item in the returned tuple is an atom whose
+items each contain a `request` and a `response`.
+
+Note that just because the response has been delivered by the handler doesn't
+mean your system has had time to process it. You may still need to poll for
+whether your system has successfully processed the response.
 
 ## Waiting for asynchronous requests
 
@@ -130,7 +139,7 @@ There is one optional argument:
 (let [[requests handler] (recording-requests)]
   (with-standalone-server [s (standalone-server handler)]
     ;; Trigger async code which will make unknown number of requests...
-    (requests-quiescent requests {:timeout 1000})))
+    (requests-quiescent requests {:for-ms 1000})))
 ```
 
 Note that `requests-quiescent` will always take at least `for-ms` to return.
@@ -145,7 +154,7 @@ Because of this, your tests will be much faster if you can use
 
 The `query` namespace contains helpers for filtering collections of requests.
 
-| Name                  | Params       | Includes                                                      | 
+| Name                  | Params       | Includes                                                      |
 | --------------------- | ------------ | ------------------------------------------------------------- |
 | with-uri              | uri coll     | Filters coll to requests with the given uri                   |
 | with-method           | method coll  | With the given request method                                 |
