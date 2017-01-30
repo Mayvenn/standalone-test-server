@@ -15,13 +15,13 @@ help explain some of the motivation/reasoning behind this small library.
 
 Add this line to your `:dependencies` key for your project.clj:
 
-```clj
+```clojure
 [standalone-test-server "0.6.1"]
 ```
 
 Then you can require it using:
 
-```clj
+```clojure
 (ns ...
     (:require [standalone-test-server :refer [standalone-server
                                               recording-requests
@@ -40,7 +40,7 @@ A wrapper around [ring.adapter.jetty](https://github.com/ring-clojure/ring/tree/
 
 Like `run-jetty`, it expects a ring handler and some (optional) config.
 
-```clj
+```clojure
 (let [server (standalone-server (constantly {:status 201, :body "hi"}))]
   (try
     (http/get "http://localhost:4334/endpoint") ;; NOTE: request port must match the standalone-server's port
@@ -55,7 +55,7 @@ You can avoid the let-try-finally boilerplate of `standalone-server` with the
 
 It assumes the first binding is the server:
 
-```clj
+```clojure
 (with-standalone-server [server (standalone-server (constantly {:status 201, :body "hi"}))]
   ;; perform requests
   ;; macro ensures `(.stop server)`
@@ -72,7 +72,7 @@ returns a tuple: the first item is an atom containing the sequence of requests
 the handler has received; the second item is a modified handler to pass to the
 `standalone-server`.
 
-```clj
+```clojure
 (let [[requests handler] (recording-requests)]
   (with-standalone-server [s (standalone-server handler)]
     (http/get "http://localhost:4334/endpoint")
@@ -82,7 +82,7 @@ the handler has received; the second item is a modified handler to pass to the
 You can provide a `:handler` as the underlying ring handler to call. If none is
 provided, it uses a default that returns a 200 empty body response.
 
-```clj
+```clojure
 (let [[requests handler]
       (recording-requests {:handler (constantly {:status 201, :body "hi"})})]
   (with-standalone-server [s (standalone-server handler)]
@@ -104,7 +104,7 @@ This helper takes a requests atom and a predicate. If the requests satisfy the
 predicate before the timeout this helper returns true. Otherwise, it returns
 false.
 
-```clj
+```clojure
 (let [[requests handler] (recording-requests)]
   (with-standalone-server [s (standalone-server handler)]
     ;; Trigger async code which will make request...
@@ -130,7 +130,7 @@ whether your system has successfully processed the response.
 If you don't know how many requests will be made and just want to wait until the
 server has stopped receiving them, use `requests-quiescent`:
 
-```clj
+```clojure
 (let [[requests handler] (recording-requests)]
   (with-standalone-server [s (standalone-server handler)]
     ;; Trigger async code which will make unknown number of requests...
