@@ -9,21 +9,21 @@
   (doto (Thread. f)
     (.start)))
 
-(deftest recording-requests-with-body
-  (let [[requests handler] (recording-requests)]
+(deftest recording-endpoint-with-body
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (http/post "http://localhost:4334/endpoint?a=b"
                  {:body "{\"test\":\"value\"}"})
       (is (= "{\"test\":\"value\"}" (->> @requests first :body))))))
 
-(deftest recording-requests-without-body
-  (let [[requests handler] (recording-requests)]
+(deftest recording-endpoint-without-body
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (http/get "http://localhost:4334/endpoint")
       (is (= "/endpoint" (-> @requests first :uri))))))
 
 (deftest recording-several-requests-with-body
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (dotimes [n 5] (http/post "http://localhost:4334/endpoint"
                                 {:body (str "hello there #" n)}))
@@ -37,12 +37,12 @@
                   (map :body)))))))
 
 (deftest requests-meet?-returns-false-if-timeout-is-reached
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (is (not (requests-meet? requests #(<= 5 (count %)) {:timeout 10}))))))
 
 (deftest waiting-until-requests-quiescent
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler {:port 4336})]
       (dotimes [n 4]
         (thread-run
@@ -57,30 +57,19 @@
       (is (requests-min-count? requests 3)))))
 
 (deftest requests-count?-succeeds-when-requests-have-been-made
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (is (not (requests-count? requests 1)))
       (http/get "http://localhost:4334/endpoint")
       (is (requests-count? requests 1)))))
 
 (deftest requests-count?-succeeds-if-requests-start-with-given-number-of-requests
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (is (requests-count? requests 0 {:timeout 10})))))
 
-(deftest responses-count?-can-be-used-to-wait-until-slow-handler-has-finished
-  (let [processed?                     (promise)
-        [responses handler] (recording-responses {:handler (fn [req]
-                                                             (Thread/sleep 50)
-                                                             (deliver processed? true)
-                                                             {:status 200 :body ""})})]
-    (with-standalone-server [ss (standalone-server handler)]
-      (thread-run #(http/get "http://localhost:4334/endpoint"))
-      (is (responses-count? responses 1))
-      (is (realized? processed?)))))
-
 (deftest recording-concurrent-requests-accurately
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (dotimes [n 5]
         (thread-run
@@ -95,12 +84,12 @@
              (set (map :body @requests)))))))
 
 (deftest recording-without-a-request-returns-an-empty-vec
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (is (= [] @requests)))))
 
 (deftest recording-parses-no-query-params-as-empty-map
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (let [resp (http/get "http://localhost:4334/endpoint")]
         (is (= {}
@@ -109,7 +98,7 @@
                    :query-params)))))))
 
 (deftest recording-parses-query-params
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (let [resp (http/get "http://localhost:4334/endpoint?hello=world&array=0&array=2&array=3")]
         (is (= {"hello" "world"
@@ -118,11 +107,11 @@
                    first
                    :query-params)))))))
 
-(deftest recording-requests-preserves-input-stream-body-for-handler
+(deftest recording-endpoint-preserves-input-stream-body-for-handler
   (let [inner-handler-body (promise)
         inner-handler (fn [req] (deliver inner-handler-body (:body req))
                         {:status 200 :body ""})
-        [_ handler] (recording-requests {:handler inner-handler})]
+        [_ handler] (recording-endpoint {:handler inner-handler})]
     (with-standalone-server [ss (standalone-server handler)]
       (http/post "http://localhost:4334/endpoint"
                  {:body "hello there"})
@@ -130,27 +119,27 @@
 
 (deftest specifying-a-response-handler
   (let [response-handler (constantly {:status 201 :headers {}})
-        [_ handler] (recording-requests {:handler response-handler})]
+        [_ handler] (recording-endpoint {:handler response-handler})]
     (with-standalone-server [ss (standalone-server handler)]
       (let [resp (http/get "http://localhost:4334/endpoint")]
         (is (= 201 (:status resp)))))))
 
 (deftest getting-recorded-requests
   (testing "returns requests so far when the expected request count has not been met"
-    (let [[requests handler] (recording-requests {:request-count 2})]
+    (let [[requests handler] (recording-endpoint {:request-count 2})]
       (with-standalone-server [ss (standalone-server handler)]
         (http/get "http://localhost:4334/endpoint")
         (is (= 1 (count @requests)))))))
 
 (deftest running-on-different-port
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler {:port 4335})]
       (http/get "http://localhost:4335/endpoint")
       (is (= 1 (count @requests))))))
 
 (deftest specifying-multiple-servers-together
   (testing "with-standalone-server allows multiple server bindings"
-    (let [[requests handler] (recording-requests {:request-count 2})]
+    (let [[requests handler] (recording-endpoint {:request-count 2})]
       (with-standalone-server [s1 (standalone-server handler)
                                s2 (standalone-server handler {:port 4335})]
         (http/get "http://localhost:4334/endpoint")

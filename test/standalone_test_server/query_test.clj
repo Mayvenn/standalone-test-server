@@ -115,7 +115,7 @@
                             "test" "value"}))))))
 
 (deftest future-integration
-  (let [[requests handler] (recording-requests)]
+  (let [[requests handler] (recording-endpoint)]
     (with-standalone-server [ss (standalone-server handler)]
       (http/post "http://localhost:4334/endpoint?a=b"
                  {:headers {:content-type "application/json"}

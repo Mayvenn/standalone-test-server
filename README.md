@@ -24,7 +24,7 @@ Then you can require it using:
 ```clojure
 (ns ...
     (:require [standalone-test-server :refer [standalone-server
-                                              recording-requests
+                                              recording-endpoint
                                               with-standalone-server]]))
 ```
 
@@ -62,10 +62,10 @@ It assumes the first binding is the server:
   )
 ```
 
-### recording-requests
+### recording-endpoint
 
 `standalone-server` expects a handler. When you want to record the requests that
-pass through that handler, use `recording-requests`.
+pass through that handler, use `recording-endpoint`.
 
 This function wraps (or creates - see below) a ring middleware handler. It
 returns a tuple: the first item is an atom containing the sequence of requests
@@ -73,7 +73,7 @@ the handler has received; the second item is a modified handler to pass to the
 `standalone-server`.
 
 ```clojure
-(let [[requests handler] (recording-requests)]
+(let [[requests handler] (recording-endpoint)]
   (with-standalone-server [s (standalone-server handler)]
     (http/get "http://localhost:4334/endpoint")
     (is (= 1 (count @requests)))))
@@ -84,7 +84,7 @@ provided, it uses a default that returns a 200 empty body response.
 
 ```clojure
 (let [[requests handler]
-      (recording-requests {:handler (constantly {:status 201, :body "hi"})})]
+      (recording-endpoint {:handler (constantly {:status 201, :body "hi"})})]
   (with-standalone-server [s (standalone-server handler)]
     (let [response (http/get "http://localhost:4334/endpoint")]
       (is (= 1 (count @requests)))
@@ -105,7 +105,7 @@ predicate before the timeout this helper returns true. Otherwise, it returns
 false.
 
 ```clojure
-(let [[requests handler] (recording-requests)]
+(let [[requests handler] (recording-endpoint)]
   (with-standalone-server [s (standalone-server handler)]
     ;; Trigger async code which will make request...
     (is (requests-meet? requests #(= 1 (count %)) {:timeout 1000}))
@@ -117,21 +117,16 @@ A shorter way to do the above is `(is (requests-count? requests 1))`. You can
 also check `(is (requests-min-count? requests 1))` if you want to wait for *at
 least* one request.
 
-Sometimes you care less that your system has made some requests, and more that
-it has received some (possibly slow) responses. In this case, it is better to
-use `recording-responses`. The first item in the returned tuple is an atom whose
-items each contain a `request` and a `response`. There are also helpers for
-`responses-meet?`, `responses-count?`, etc.
-
-Note that just because the response has been delivered by the handler doesn't
-mean your system has had time to process it. You may still need to poll for
+Note that just because a request was recorded, doesn't
+mean your system has received the response yet or even has 
+had time to process it. You may still need to poll for
 whether your system has successfully processed the response.
 
 If you don't know how many requests will be made and just want to wait until the
 server has stopped receiving them, use `requests-quiescent`:
 
 ```clojure
-(let [[requests handler] (recording-requests)]
+(let [[requests handler] (recording-endpoint)]
   (with-standalone-server [s (standalone-server handler)]
     ;; Trigger async code which will make unknown number of requests...
     (requests-quiescent requests {:for-ms 1000})))
