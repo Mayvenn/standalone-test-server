@@ -1,9 +1,8 @@
 (ns standalone-test-server.core-test
-  (:require [clojure.test :refer :all]
-            [standalone-test-server.core :refer :all]
-            [standalone-test-server.query :refer :all]
-            [clj-http.client :as http])
-  (:import [java.net ConnectException]))
+  (:require [clj-http.client :as http]
+            [clojure.test :refer :all]
+            [standalone-test-server.core :refer :all])
+  (:import java.net.ConnectException))
 
 (defn ^:private thread-run [f]
   (doto (Thread. f)
@@ -123,6 +122,27 @@
     (with-standalone-server [ss (standalone-server handler)]
       (let [resp (http/get "http://localhost:4334/endpoint")]
         (is (= 201 (:status resp)))))))
+
+(deftest specifying-a-sequence-of-response-handlers
+  (let [response-handler1 (constantly {:status 201 :headers {} :body "resp-handler-1"})
+        response-handler2 (constantly {:status 201 :headers {} :body "resp-handler-2"})
+        response-handler3 (constantly {:status 201 :headers {} :body "resp-handler-3"})
+        [_ handler] (recording-endpoint {:handler (seq-handler response-handler1
+                                                               response-handler2
+                                                               response-handler3)})]
+    (with-standalone-server [ss (standalone-server handler)]
+      (let [resp1 (http/get "http://localhost:4334/endpoint")
+            resp2 (http/get "http://localhost:4334/endpoint")
+            resp3 (http/get "http://localhost:4334/endpoint")
+            resp4 (http/get "http://localhost:4334/endpoint")]
+        (is (= 201 (:status resp1)))
+        (is (= 201 (:status resp2)))
+        (is (= 201 (:status resp3)))
+        (is (= 200 (:status resp4)))
+        (is (= "resp-handler-1" (-> resp1 :body)))
+        (is (= "resp-handler-2" (-> resp2 :body)))
+        (is (= "resp-handler-3" (-> resp3 :body)))
+        (is (= "" (-> resp4 :body)))))))
 
 (deftest getting-recorded-requests
   (testing "returns requests so far when the expected request count has not been met"

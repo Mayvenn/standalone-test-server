@@ -159,3 +159,28 @@
          (with-standalone-server ~(subvec bindings 2) ~@body)
          (finally
            (.stop ~(bindings 0)))))))
+
+(defn seq-handler
+  "A helper function which iterates through a sequence of handlers using a new one for each call to the handler.
+
+  Uses the default handler when out of handlers to use.
+
+  Example
+
+  (recording-endpoint
+   {:timeout 1000
+    :handler (seq-handler
+              ;;first handler
+              (wiretaps/http-response \"saddle_creek/PLGetInventory/no_products.json\")
+              ;;second handler
+              (wiretaps/http-response \"saddle_creek/PLGetInventory/products.json\"))})
+
+  "
+  [& handlers]
+  (let [handlers-atom (atom handlers)]
+    (fn [request]
+      (if-let [next-handler (first @handlers-atom)]
+        (let [response (next-handler request)]
+          (swap! handlers-atom rest)
+          response)
+        (default-handler request)))))
