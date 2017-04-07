@@ -179,8 +179,9 @@
   [& handlers]
   (let [handlers-atom (atom handlers)]
     (fn [request]
-      (if-let [next-handler (first @handlers-atom)]
-        (let [response (next-handler request)]
-          (swap! handlers-atom rest)
-          response)
-        (default-handler request)))))
+      (locking handlers-atom
+        (if-let [next-handler (first @handlers-atom)]
+          (let [response (next-handler request)]
+            (swap! handlers-atom rest)
+            response)
+          (default-handler request))))))

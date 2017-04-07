@@ -144,6 +144,19 @@
         (is (= "resp-handler-3" (-> resp3 :body)))
         (is (= "" (-> resp4 :body)))))))
 
+(deftest specifying-a-sequence-of-response-handlers
+  (let [response-handlers (map #(constantly {:status 201 :headers {} :body (str "resp-handler-" %)}) (range 4))
+        [_ handler] (recording-endpoint {:handler (apply seq-handler response-handlers)})]
+    (with-standalone-server [ss (standalone-server handler)]
+      (let [resps (map deref [(future (http/get "http://localhost:4334/endpoint"))
+                              (future (http/get "http://localhost:4334/endpoint"))
+                              (future (http/get "http://localhost:4334/endpoint"))
+                              (future (http/get "http://localhost:4334/endpoint"))])]
+        (is (= (repeat 4 201)
+               (map :status resps)))
+        (is (= #{"resp-handler-0" "resp-handler-1" "resp-handler-2" "resp-handler-3"}
+               (set (map :body resps))))))))
+
 (deftest getting-recorded-requests
   (testing "returns requests so far when the expected request count has not been met"
     (let [[requests handler] (recording-endpoint {:request-count 2})]
