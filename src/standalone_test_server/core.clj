@@ -172,9 +172,9 @@
    {:timeout 1000
     :handler (seq-handler
               ;;first handler
-              (wiretaps/http-response \"saddle_creek/PLGetInventory/no_products.json\")
+              (fn [req] {:status 200 :body \"ok\"})
               ;;second handler
-              (wiretaps/http-response \"saddle_creek/PLGetInventory/products.json\"))})
+              (fn [req] {:status 400 :body \"bad\"}))})
   ```"
   [& handlers]
   (let [handlers-atom (atom handlers)]
