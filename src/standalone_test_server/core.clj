@@ -167,6 +167,7 @@
 
   Example
 
+  ```clj
   (recording-endpoint
    {:timeout 1000
     :handler (seq-handler
@@ -174,8 +175,7 @@
               (wiretaps/http-response \"saddle_creek/PLGetInventory/no_products.json\")
               ;;second handler
               (wiretaps/http-response \"saddle_creek/PLGetInventory/products.json\"))})
-
-  "
+  ```"
   [& handlers]
   (let [handlers-atom (atom handlers)]
     (fn [request]
