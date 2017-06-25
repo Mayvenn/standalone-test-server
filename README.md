@@ -1,6 +1,6 @@
 # Standalone Test Server
 
-[![Circle CI](https://circleci.com/gh/Mayvenn/standalone-test-server.svg?style=svg&circle-token=599f432978d381e2614f42ed892267b45dde78d9)](https://circleci.com/gh/Mayvenn/standalone-test-server) [Documentation](http://mayvenn.github.io/standalone-test-server/standalone-test-server.core.html)
+[![Circle CI](https://circleci.com/gh/Mayvenn/standalone-test-server.svg?style=svg&circle-token=599f432978d381e2614f42ed892267b45dde78d9)](https://circleci.com/gh/Mayvenn/standalone-test-server) [Documentation](http://mayvenn.github.io/standalone-test-server/standalone-test-server.core.html) [![Clojars Project](https://img.shields.io/clojars/v/standalone-test-server.svg)](https://clojars.org/standalone-test-server)
 
 A simple clojure HTTP ring handler to test HTTP requests.
 
@@ -16,16 +16,14 @@ help explain some of the motivation/reasoning behind this small library.
 Add this line to your `:dependencies` key for your project.clj:
 
 ```clojure
-[standalone-test-server "0.6.1"]
+[standalone-test-server "0.7.1"]
 ```
 
 Then you can require it using:
 
 ```clojure
-(ns ...
-    (:require [standalone-test-server :refer [standalone-server
-                                              recording-endpoint
-                                              with-standalone-server]]))
+(ns my-system.tests
+  (:require [standalone-test-server.core :as sts]))
 ```
 
 ## Usage
@@ -41,9 +39,11 @@ A wrapper around [ring.adapter.jetty](https://github.com/ring-clojure/ring/tree/
 Like `run-jetty`, it expects a ring handler and some (optional) config.
 
 ```clojure
-(let [server (standalone-server (constantly {:status 201, :body "hi"}))]
+(let [server (sts/standalone-server (constantly {:status 201, :body "hi"})
+                                    {:port 4334})]
   (try
-    (http/get "http://localhost:4334/endpoint") ;; NOTE: request port must match the standalone-server's port
+    ;; Make requests which need an HTTP server listening at a specific port
+    (http/get "http://localhost:4334/endpoint")
     (finally
       (.stop server))))
 ```
@@ -56,89 +56,103 @@ You can avoid the let-try-finally boilerplate of `standalone-server` with the
 It assumes the first binding is the server:
 
 ```clojure
-(with-standalone-server [server (standalone-server (constantly {:status 201, :body "hi"}))]
+(sts/with-standalone-server [server (sts/standalone-server (constantly {:status 201, :body "hi"}))]
   ;; perform requests
   ;; macro ensures `(.stop server)`
   )
 ```
 
-### recording-endpoint
+### with-requests-chan
 
-`standalone-server` expects a handler. When you want to record the requests that
-pass through that handler, use `recording-endpoint`.
+When you want to record the requests that pass through a `standalone-server`,
+use `with-requests-chan`.
 
-This function wraps (or creates - see below) a ring middleware handler. It
-returns a tuple: the first item is an atom containing the sequence of requests
-the handler has received; the second item is a modified handler to pass to the
+This function creates (or wraps - see below) a ring middleware handler. It
+returns a tuple: the first item is a channel containing the requests the handler
+receives; the second item is a modified handler to pass to the
 `standalone-server`.
 
 ```clojure
-(let [[requests handler] (recording-endpoint)]
-  (with-standalone-server [s (standalone-server handler)]
+(let [[requests handler] (sts/with-requests-chan)]
+  (sts/with-standalone-server [s (sts/standalone-server handler)]
     (http/get "http://localhost:4334/endpoint")
-    (is (= 1 (count @requests)))))
+    (is (core.async/<!! requests))))
 ```
 
-You can provide a `:handler` as the underlying ring handler to call. If none is
-provided, it uses a default that returns a 200 empty body response.
+By default `with-requests-chan` uses a handler that returns a 200 empty body
+response. Alternatively, provide a `handler` as the underlying ring handler to
+call.
 
 ```clojure
-(let [[requests handler]
-      (recording-endpoint {:handler (constantly {:status 201, :body "hi"})})]
-  (with-standalone-server [s (standalone-server handler)]
-    (let [response (http/get "http://localhost:4334/endpoint")]
-      (is (= 1 (count @requests)))
-      (is (= (:body response) "hi")))))
+(let [[requests handler] (sts/with-requests-chan (constantly {:status 201, :body "hi"}))]
+  (sts/with-standalone-server [s (sts/standalone-server handler)]
+    (http/get "http://localhost:4334/endpoint")
+    (is (= "hi" (:body (core.async/<!! requests))))))
 ```
-
-Most tests will look like this, so make sure you understand this format.
 
 ## Waiting for asynchronous requests
 
 Many systems will make requests to the standalone server asynchronously. Tests
-usually want to block until the requests have been made before making further
-assertions. There are several helpers for waiting until the requests meet a
-condition before continuing. They are all based on the `requests-meet?` helper.
+usually want to wait until the requests have been made before making further
+assertions. Often the tests want to make assertions about the requests
+themselves, or some subset of the requests. If the system fails to produce the
+expected requests, the tests should not block forever.
 
-This helper takes a requests atom and a predicate. If the requests satisfy the
-predicate before the timeout this helper returns true. Otherwise, it returns
-false.
+For these scenarios, `txfm-requests` gathers and returns the asynchronous requests.
+
+It takes a requests channel, a filter (a transducing function) and a timeout. If
+the requests satisfy the filter before the timeout this helper returns the
+requests. Otherwise, it returns as many matching requests as it has received so
+far.
 
 ```clojure
-(let [[requests handler] (recording-endpoint)]
-  (with-standalone-server [s (standalone-server handler)]
-    ;; Trigger async code which will make request...
-    (is (requests-meet? requests #(= 1 (count %)) {:timeout 1000}))
-    ;; Assertions about how system has changed after receiving response...
-    ))
+(let [[requests handler] (sts/with-requests-chan)]
+  (sts/with-standalone-server [s (sts/standalone-server handler)]
+    ;; Trigger async code which will make requests...
+    (future (http/get "http://localhost:4334/endpoint1"))
+    (future (http/get "http://localhost:4334/endpoint2"))
+    (is (= "endpoint2"
+           (-> requests
+               (sts/txfm-requests (comp (filter #(= "endpoint2" (:uri %)))
+                                        (take 1))
+                                  {:timeout 1000})
+               first
+               :uri)))))
 ```
 
-A shorter way to do the above is `(is (requests-count? requests 1))`. You can
-also check `(is (requests-min-count? requests 1))` if you want to wait for *at
-least* one request.
+Most tests will look like this, so make sure you understand this format.
 
-Note that just because a request was recorded, doesn't
-mean your system has received the response yet or even has 
-had time to process it. You may still need to poll for
-whether your system has successfully processed the response.
+The filter should contain `(take n)` to avoid waiting for the whole timeout.
+With a limit like this, `txfm-requests` will return as soon as `n` matching
+requests have been found.
 
-If you don't know how many requests will be made and just want to wait until the
-server has stopped receiving them, use `requests-quiescent`:
+To avoid delays, mosts tests should include `(take n)`. One exception is if you
+don't know how many requests will be made. In this case simply exclude the
+`take`. When the timeout is reached, you will see all the requests made so far.
 
 ```clojure
-(let [[requests handler] (recording-endpoint)]
-  (with-standalone-server [s (standalone-server handler)]
+(let [[requests handler] (sts/with-requests-chan)]
+  (sts/with-standalone-server [s (sts/standalone-server handler)]
     ;; Trigger async code which will make unknown number of requests...
-    (requests-quiescent requests {:for-ms 1000})))
+    ;; Following waits for one second, gathering as many requests as happen in
+    ;; that period.
+    (is (< 0 (count (sts/txfm-requests requests conj {:timeout 1000}))))))
 ```
 
-Note that `requests-quiescent` will always take at least `for-ms` to return.
-This is because it starts a timer when it is called, resets the timer after
-every new request, and waits for the timer to expire before declaring
-quiescence.
+A shorter way to extract the first matching request is with `txfm-request`. This
+helper adds an implicit `(take 1)` to ensure it returns as quickly as possible.
 
-Because of this, your tests will be much faster if you can use
-`requests-count?`.
+```clojure
+(is (= "endpoint2"
+       (-> requests
+           (sts/txfm-request (filter #(= "endpoint2" (:uri %)))
+                             {:timeout 1000})
+           :uri)))
+```
+
+Note that just because a request was recorded, doesn't mean your system has
+received the response yet or even has had time to process it. You may still need
+to poll for whether your system has successfully processed the response.
 
 ## Filtering requests
 

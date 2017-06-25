@@ -115,7 +115,7 @@
                             "test" "value"}))))))
 
 (deftest future-integration
-  (let [[requests handler] (recording-endpoint)]
+  (let [[requests handler] (with-requests-chan)]
     (with-standalone-server [ss (standalone-server handler)]
       (http/post "http://localhost:4334/endpoint?a=b"
                  {:headers {:content-type "application/json"}
@@ -128,7 +128,8 @@
       (http/get "http://localhost:4334/not_endpoint?c=d"
                  {})
       (is (= ["{\"test\":\"value\"}" "test=value&second_test=second_value"]
-             (->> @requests
+             ;; TODO: make query helpers transducers so they can go in txfm-requests
+             (->> (txfm-requests requests (take 4))
                   (with-body-key-subset #{"test"})
                   (with-method :post)
                   (map :body)))))))

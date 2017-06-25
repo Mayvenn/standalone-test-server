@@ -8,6 +8,7 @@
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [ring/ring-codec "1.0.0"]
                  [ring/ring-jetty-adapter "1.3.2"]
+                 [org.clojure/core.async "0.3.443"]
                  [org.clojure/data.json "0.2.6"]]
   :codox {:source-paths ["src"]
           :source-uri "http://github.com/Mayvenn/standalone-test-server/blob/master/{filepath}#L{line}"
