@@ -53,7 +53,7 @@
       ;; with timeout 900, txfm-requests waits for up to 900ms for all requests,
       ;; which means it will short-circuit between 3rd request at 100ms and 4th
       ;; request at 1s
-      (is (= 3 (count (txfm-requests requests (take 3) {:timeout 900})))))))
+      (is (= 3 (count (txfm-requests requests conj {:timeout 900})))))))
 
 (deftest requests-can-be-fetched-when-requests-have-been-made
   (let [[requests handler] (with-requests-chan)]
