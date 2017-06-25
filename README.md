@@ -16,7 +16,7 @@ help explain some of the motivation/reasoning behind this small library.
 Add this line to your `:dependencies` key for your project.clj:
 
 ```clojure
-[standalone-test-server "0.7.1"]
+[standalone-test-server "0.7.2"]
 ```
 
 Then you can require it using:
