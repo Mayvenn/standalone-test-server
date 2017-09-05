@@ -232,6 +232,9 @@
   [handler & [opts]]
   (jetty/run-jetty handler (merge {:port 4334 :join? false} opts)))
 
+(defn stop [^org.eclipse.jetty.server.Server server]
+  (.stop server))
+
 (defmacro with-standalone-server
   "A convenience macro to ensure a [[standalone-server]] is stopped.
 
@@ -254,7 +257,7 @@
        (try
          (with-standalone-server ~(subvec bindings 2) ~@body)
          (finally
-           (.stop ~(bindings 0)))))))
+           (stop ~(bindings 0)))))))
 
 (defn seq-handler
   "A helper function which iterates through a sequence of handlers using a new one for each call to the handler.
