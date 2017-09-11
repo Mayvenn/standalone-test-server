@@ -134,7 +134,7 @@
                                                          :query-string
                                                          form-decode)))]
          (swap! requests-atom conj request)
-         (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))))]))
+         (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes ^String %))))))]))
 
 (defn txfm-requests
   "Accepts a channel of `requests` and a transducing function `xf` which can
@@ -217,7 +217,7 @@
                                                           :query-string
                                                           form-decode)))]
           (async/>!! requests-chan request)
-          (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes %))))))])))
+          (handler (update-in request [:body] #(ByteArrayInputStream. (.getBytes ^String %))))))])))
 
 (defn standalone-server
   "Wrapper to start a standalone server through `ring-jetty.` Takes a ring handler
@@ -231,9 +231,6 @@
   ```"
   [handler & [opts]]
   (jetty/run-jetty handler (merge {:port 4334 :join? false} opts)))
-
-(defn stop [^org.eclipse.jetty.server.Server server]
-  (.stop server))
 
 (defmacro with-standalone-server
   "A convenience macro to ensure a [[standalone-server]] is stopped.
@@ -253,11 +250,12 @@
     `(do ~@body)
 
     (symbol? (bindings 0))
-    `(let ~(subvec bindings 0 2)
-       (try
-         (with-standalone-server ~(subvec bindings 2) ~@body)
-         (finally
-           (stop ~(bindings 0)))))))
+    (let [tagged-server (vary-meta (first bindings) assoc :tag `org.eclipse.jetty.server.Server)]
+      `(let [~tagged-server ~(second bindings)]
+         (try
+           (with-standalone-server ~(subvec bindings 2) ~@body)
+           (finally
+             (.stop ~tagged-server)))))))
 
 (defn seq-handler
   "A helper function which iterates through a sequence of handlers using a new one for each call to the handler.
