@@ -1,9 +1,9 @@
 (ns standalone-test-server.query
   (:require [clojure.set :as set]
-            [clojure.data.json :as json]
+            [cheshire.core :as json]
             [ring.util.codec :as ring]))
 
-(def json-parser json/read-str)
+(def json-parser json/parse-string)
 (def form-parser ring/form-decode)
 (defn xml-parser [] (throw (Exception. "XML Parsing has not been implmented")))
 
